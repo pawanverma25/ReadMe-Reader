@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Switch,
@@ -9,9 +7,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { AlertConfig, ThemedAlert } from '../../components/common/ThemedAlert';
 import {
   exportBackupToFile,
   importBackupFromFile,
@@ -25,18 +25,49 @@ export default function DataStorageScreen() {
 
   const [clearOnLaunch, setClearOnLaunch] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
+  const showAlert = (config: Omit<AlertConfig, 'visible'>) => {
+    setAlertConfig({ ...config, visible: true });
+  };
+
+  const hideAlert = () => {
+    setAlertConfig((prev) => ({ ...prev, visible: false }));
+  };
 
   const handleExportBackup = async () => {
     try {
       setIsProcessing(true);
       const res = await exportBackupToFile();
       if (res.success) {
-        Alert.alert('Backup Created', 'Your ReadMe backup file (.json) was generated and exported successfully!');
+        showAlert({
+          title: 'Backup Created',
+          message: 'Your ReadMe backup file (.json) was generated and exported successfully!',
+          type: 'success',
+          confirmText: 'OK',
+          onConfirm: hideAlert,
+        });
       } else {
-        Alert.alert('Export Failed', res.error || 'Failed to export backup.');
+        showAlert({
+          title: 'Export Failed',
+          message: res.error || 'Failed to export backup.',
+          type: 'error',
+          confirmText: 'OK',
+          onConfirm: hideAlert,
+        });
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to create backup.');
+      showAlert({
+        title: 'Export Error',
+        message: e?.message || 'Failed to create backup.',
+        type: 'error',
+        confirmText: 'OK',
+        onConfirm: hideAlert,
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -48,22 +79,37 @@ export default function DataStorageScreen() {
       const res = await importBackupFromFile();
       if (res.success && res.data) {
         await reloadAllData();
-        Alert.alert(
-          'Backup Restored!',
-          `Successfully restored ${res.data.books.length} books and ${res.data.categories.length} library categories onto this device!`
-        );
+        showAlert({
+          title: 'Backup Restored!',
+          message: `Successfully restored ${res.data.books.length} books and ${res.data.categories.length} library categories onto this device!`,
+          type: 'success',
+          confirmText: 'Awesome',
+          onConfirm: hideAlert,
+        });
       } else if (res.error && res.error !== 'Import cancelled') {
-        Alert.alert('Import Failed', res.error);
+        showAlert({
+          title: 'Import Failed',
+          message: res.error,
+          type: 'error',
+          confirmText: 'OK',
+          onConfirm: hideAlert,
+        });
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to import backup file.');
+      showAlert({
+        title: 'Import Error',
+        message: e?.message || 'Failed to import backup file.',
+        type: 'error',
+        confirmText: 'OK',
+        onConfirm: hideAlert,
+      });
     } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -147,7 +193,7 @@ export default function DataStorageScreen() {
             /storage/emulated/0
           </Text>
 
-          {/* Mihon Thick Pink Storage Bar */}
+          {/* Mihon Storage Bar */}
           <View style={[styles.storageTrack, { backgroundColor: colors.surfaceVariant }]}>
             <View style={[styles.storageFill, { backgroundColor: colors.primary, width: '78%' }]} />
           </View>
@@ -177,18 +223,10 @@ export default function DataStorageScreen() {
             thumbColor="#FFFFFF"
           />
         </View>
-
-        {/* Section: Export */}
-        <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 24 }]}>
-          Export
-        </Text>
-
-        <TouchableOpacity style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <View style={styles.settingLabelContainer}>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Library List</Text>
-          </View>
-        </TouchableOpacity>
       </ScrollView>
+
+      {/* Custom Mihon Alert Dialog */}
+      <ThemedAlert {...alertConfig} />
     </SafeAreaView>
   );
 }

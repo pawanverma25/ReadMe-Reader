@@ -69,6 +69,7 @@ export interface ReaderSettings {
   incognitoMode?: boolean;
   grayscale?: boolean;
   inverted?: boolean;
+  tabletUiMode?: 'auto' | 'always' | 'landscape' | 'never';
 }
 
 export interface BackupData {

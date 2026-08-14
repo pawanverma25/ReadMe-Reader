@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,9 +8,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLibrary } from '../contexts/LibraryContext';
+import { AlertConfig, ThemedAlert } from '../components/common/ThemedAlert';
 import { ArrowLeft, Edit2, Plus, Trash2, X } from 'lucide-react-native';
 
 export default function CategoryManagerScreen() {
@@ -24,6 +24,11 @@ export default function CategoryManagerScreen() {
   const [newCatName, setNewCatName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCatName, setEditCatName] = useState('');
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
+    visible: false,
+    title: '',
+    message: '',
+  });
 
   const handleCreate = async () => {
     if (!newCatName.trim()) return;
@@ -41,18 +46,25 @@ export default function CategoryManagerScreen() {
   };
 
   const handleDelete = (id: string, name: string) => {
-    Alert.alert('Delete Category', `Are you sure you want to delete "${name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => deleteCategory(id),
+    setAlertConfig({
+      visible: true,
+      title: 'Delete Category',
+      message: `Are you sure you want to delete category "${name}"? Books in this category will remain in your main library.`,
+      type: 'warning',
+      confirmText: 'Delete Category',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+        await deleteCategory(id);
       },
-    ]);
+      onCancel: () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+      },
+    });
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -203,6 +215,9 @@ export default function CategoryManagerScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Mihon Alert Dialog */}
+      <ThemedAlert {...alertConfig} />
     </SafeAreaView>
   );
 }

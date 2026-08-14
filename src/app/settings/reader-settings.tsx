@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Switch,
@@ -8,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useReaderSettings } from '../../contexts/ReaderContext';
@@ -19,7 +19,7 @@ export default function ReaderSettingsScreen() {
   const { settings, updateSettings } = useReaderSettings();
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>

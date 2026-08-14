@@ -17,11 +17,7 @@ import {
   BookmarkCheck,
   ChevronLeft,
   ChevronRight,
-  Eye,
   ListOrdered,
-  Maximize2,
-  Minimize2,
-  Sliders,
   SlidersHorizontal,
   X,
 } from 'lucide-react-native';
@@ -54,7 +50,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
   const { colors } = useTheme();
   const [showJumpModal, setShowJumpModal] = useState(false);
   const [jumpPageInput, setJumpPageInput] = useState('');
-  const [showBookmarksModal, setShowBookmarksModal] = useState(false);
+  const [showBookmarksDrawer, setShowBookmarksDrawer] = useState(false);
   const [showReaderSettingsSheet, setShowReaderSettingsSheet] = useState(false);
   const [activeSheetTab, setActiveSheetTab] = useState<ReaderSheetTab>('reading_mode');
 
@@ -100,7 +96,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
 
           <TouchableOpacity
             style={styles.iconBtn}
-            onPress={() => setShowBookmarksModal(true)}
+            onPress={() => setShowBookmarksDrawer(true)}
             activeOpacity={0.7}
           >
             <ListOrdered size={22} color={colors.textPrimary} />
@@ -116,9 +112,8 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
         </View>
       </View>
 
-      {/* Bottom Control Bar / Sheet */}
+      {/* Clean Bottom Control HUD Bar (Without Ambiguous Duplicate Pills) */}
       <View style={[styles.bottomBar, { backgroundColor: colors.surface }]}>
-        {/* Page Status & Jump Trigger */}
         <View style={styles.pageStatusRow}>
           <TouchableOpacity
             style={styles.pageNavBtn}
@@ -152,92 +147,9 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
             />
           </TouchableOpacity>
         </View>
-
-        {/* Quick Mode & Theme Selectors */}
-        <View style={styles.quickSelectorsRow}>
-          {/* Reading Mode Selector */}
-          <View style={[styles.pillSegment, { backgroundColor: colors.surfaceVariant }]}>
-            <TouchableOpacity
-              style={[
-                styles.segmentBtn,
-                settings.readingMode === 'long_strip' && [
-                  styles.segmentBtnActive,
-                  { backgroundColor: colors.primary },
-                ],
-              ]}
-              onPress={() => onUpdateSettings({ readingMode: 'long_strip' })}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: colors.textSecondary },
-                  settings.readingMode === 'long_strip' && { color: colors.onPrimary, fontWeight: '700' },
-                ]}
-              >
-                Long Strip
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.segmentBtn,
-                settings.readingMode !== 'long_strip' && [
-                  styles.segmentBtnActive,
-                  { backgroundColor: colors.primary },
-                ],
-              ]}
-              onPress={() => onUpdateSettings({ readingMode: 'single_page_h' })}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: colors.textSecondary },
-                  settings.readingMode !== 'long_strip' && { color: colors.onPrimary, fontWeight: '700' },
-                ]}
-              >
-                Single Page
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Reader Background Colors */}
-          <View style={styles.readerThemesRow}>
-            {(['oled', 'dark', 'sepia', 'light'] as ReaderTheme[]).map((thm) => {
-              const isActive = settings.readerTheme === thm;
-              const bgColors: Record<ReaderTheme, string> = {
-                oled: '#000000',
-                dark: '#16131B',
-                sepia: '#F4ECD8',
-                light: '#FFFFFF',
-              };
-
-              return (
-                <TouchableOpacity
-                  key={thm}
-                  style={[
-                    styles.themeDot,
-                    { backgroundColor: bgColors[thm], borderColor: colors.border },
-                    isActive && [styles.activeThemeDot, { borderColor: colors.primary }],
-                  ]}
-                  onPress={() => onUpdateSettings({ readerTheme: thm })}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.themeDotLabel,
-                      { color: thm === 'light' || thm === 'sepia' ? '#000' : '#FFF' },
-                    ]}
-                  >
-                    {thm.charAt(0).toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
       </View>
 
-      {/* Jump To Page Modal */}
+      {/* Jump To Page Dialog */}
       <Modal visible={showJumpModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.jumpModalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -278,48 +190,53 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
         </View>
       </Modal>
 
-      {/* Bookmarks Modal */}
-      <Modal visible={showBookmarksModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.bookmarksSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.sheetHeader}>
+      {/* Mihon Side Drawer Bookmarks Panel */}
+      <Modal visible={showBookmarksDrawer} transparent animationType="slide">
+        <View style={styles.drawerOverlay}>
+          <View style={[styles.bookmarksDrawer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.drawerHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
                 Bookmarks ({book.bookmarks.length})
               </Text>
-              <TouchableOpacity onPress={() => setShowBookmarksModal(false)}>
+              <TouchableOpacity onPress={() => setShowBookmarksDrawer(false)}>
                 <X size={22} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.bookmarksList}>
+            <ScrollView contentContainerStyle={styles.bookmarksListContent}>
               {book.bookmarks.length === 0 ? (
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                  No bookmarks added yet for this book. Tap the bookmark icon in the top header to save key pages.
-                </Text>
+                <View style={styles.emptyBmBox}>
+                  <Bookmark size={40} color={colors.textSecondary} style={{ opacity: 0.4 }} />
+                  <Text style={[styles.emptyBmText, { color: colors.textSecondary }]}>
+                    No saved bookmarks for this book yet. Tap the bookmark icon in the top header to pin your favorite pages!
+                  </Text>
+                </View>
               ) : (
                 book.bookmarks.map((bm) => (
                   <TouchableOpacity
                     key={bm.id}
                     style={[
-                      styles.bookmarkItem,
+                      styles.bookmarkCard,
                       { backgroundColor: colors.surface, borderColor: colors.border },
                     ]}
                     onPress={() => {
                       onPageSelect(bm.page);
-                      setShowBookmarksModal(false);
+                      setShowBookmarksDrawer(false);
                     }}
+                    activeOpacity={0.7}
                   >
-                    <View style={[styles.bmPageBadge, { backgroundColor: colors.primaryContainer }]}>
-                      <Text style={[styles.bmPageText, { color: colors.primary }]}>
+                    <View style={[styles.bmBadge, { backgroundColor: colors.primaryContainer }]}>
+                      <Text style={[styles.bmBadgeText, { color: colors.primary }]}>
                         Page {bm.page}
                       </Text>
                     </View>
-                    <View style={styles.bmDetails}>
-                      <Text style={[styles.bmTitle, { color: colors.textPrimary }]}>
-                        {bm.title || `Page ${bm.page}`}
+
+                    <View style={styles.bmInfo}>
+                      <Text style={[styles.bmTitleText, { color: colors.textPrimary }]}>
+                        {bm.title || `Bookmark Page ${bm.page}`}
                       </Text>
-                      <Text style={[styles.bmDate, { color: colors.textSecondary }]}>
-                        {new Date(bm.createdAt).toLocaleDateString()}
+                      <Text style={[styles.bmDateText, { color: colors.textSecondary }]}>
+                        Saved on {new Date(bm.createdAt).toLocaleDateString()}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -330,7 +247,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
         </View>
       </Modal>
 
-      {/* Mihon In-Reader Bottom Settings Sheet (Matching Screenshots #16, #17, #18, #19, #20) */}
+      {/* Mihon In-Reader Bottom Settings Sheet */}
       <Modal visible={showReaderSettingsSheet} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.readerSettingsSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -455,7 +372,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
                   </View>
 
                   <View style={[styles.settingRowSheet, { borderBottomColor: colors.border }]}>
-                    <Text style={[styles.settingTitleSheet, { color: colors.textPrimary }]}>Keep screen on</Text>
+                    <Text style={[styles.settingTitleSheet, { color: colors.textPrimary }]}>Keep screen awake</Text>
                     <Switch
                       value={settings.keepScreenOn}
                       onValueChange={(keepScreenOn) => onUpdateSettings({ keepScreenOn })}
@@ -569,7 +486,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
   },
   pageNavBtn: {
     padding: 8,
@@ -583,49 +499,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  quickSelectorsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pillSegment: {
-    flexDirection: 'row',
-    borderRadius: 20,
-    padding: 3,
-  },
-  segmentBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  segmentBtnActive: {
-    borderRadius: 16,
-  },
-  segmentText: {
-    fontSize: 12,
-  },
-  readerThemesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  themeDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  activeThemeDot: {
-    borderWidth: 2.5,
-    transform: [{ scale: 1.1 }],
-  },
-  themeDotLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.65)',
@@ -667,59 +540,73 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
   },
-  bookmarksSheet: {
-    width: '100%',
-    maxWidth: 440,
-    maxHeight: '75%',
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
+  // Bookmarks Drawer
+  drawerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'flex-end',
   },
-  sheetHeader: {
+  bookmarksDrawer: {
+    width: '100%',
+    height: '70%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    padding: 20,
+  },
+  drawerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    borderBottomWidth: 1,
+    paddingBottom: 14,
+    marginBottom: 14,
   },
-  bookmarksList: {
-    maxHeight: 350,
+  bookmarksListContent: {
+    paddingBottom: 20,
   },
-  emptyText: {
+  emptyBmBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyBmText: {
     fontSize: 13,
-    lineHeight: 18,
     textAlign: 'center',
-    marginVertical: 24,
+    marginTop: 12,
+    lineHeight: 18,
   },
-  bookmarkItem: {
+  bookmarkCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
+    padding: 14,
+    borderRadius: 14,
     borderWidth: 1,
     marginBottom: 10,
   },
-  bmPageBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+  bmBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
-  bmPageText: {
+  bmBadgeText: {
     fontSize: 13,
     fontWeight: '700',
   },
-  bmDetails: {
-    marginLeft: 12,
+  bmInfo: {
+    marginLeft: 14,
     flex: 1,
   },
-  bmTitle: {
+  bmTitleText: {
     fontSize: 14,
     fontWeight: '600',
   },
-  bmDate: {
+  bmDateText: {
     fontSize: 11,
-    marginTop: 2,
+    marginTop: 3,
   },
-  // Mihon In-Reader Settings Sheet Styles
+  // In-Reader Settings Sheet
   readerSettingsSheet: {
     width: '100%',
     maxWidth: 460,

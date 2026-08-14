@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  SafeAreaView,
+  Modal,
   ScrollView,
   StyleSheet,
   Switch,
@@ -8,17 +8,23 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useReaderSettings } from '../../contexts/ReaderContext';
 import { ThemePreset } from '../../types';
-import { ArrowLeft, Check } from 'lucide-react-native';
+import { ArrowLeft, Check, X } from 'lucide-react-native';
 
 export default function AppearanceScreen() {
   const { colors, themeMode, themePreset, pureBlackDarkMode, setThemeMode, setThemePreset, setPureBlackDarkMode } = useTheme();
   const router = useRouter();
+  const { settings, updateSettings } = useReaderSettings();
 
   const [relativeTimestamps, setRelativeTimestamps] = useState(true);
-  const [renderImagesInDesc, setRenderImagesInDesc] = useState(true);
+  const [showTabletModal, setShowTabletModal] = useState(false);
+
+  const tabletMode = settings.tabletUiMode || 'auto';
 
   const themePresetsConfig: { id: ThemePreset; name: string; primaryColor: string; bgNav: string }[] = [
     { id: 'default', name: 'Default', primaryColor: '#EC407A', bgNav: '#241E2B' },
@@ -32,8 +38,27 @@ export default function AppearanceScreen() {
     { id: 'sepia', name: 'Sepia Warm', primaryColor: '#D97706', bgNav: '#292524' },
   ];
 
+  const handleSelectTabletMode = async (mode: 'auto' | 'always' | 'landscape' | 'never') => {
+    updateSettings({ tabletUiMode: mode });
+    setShowTabletModal(false);
+
+    try {
+      if (mode === 'landscape') {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      } else if (mode === 'always') {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.ALL);
+      } else if (mode === 'never') {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      } else {
+        await ScreenOrientation.unlockAsync();
+      }
+    } catch (e) {
+      console.error('ScreenOrientation lock error:', e);
+    }
+  };
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Top Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -145,10 +170,17 @@ export default function AppearanceScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+        {/* Tablet UI / Landscape Orientation Selector (Matching Screenshot #5) */}
+        <TouchableOpacity
+          style={[styles.settingRow, { borderBottomColor: colors.border }]}
+          onPress={() => setShowTabletModal(true)}
+          activeOpacity={0.7}
+        >
           <View style={styles.settingLabelContainer}>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Tablet UI</Text>
-            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Auto</Text>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Tablet UI & Landscape</Text>
+            <Text style={[styles.settingSub, { color: colors.primary, fontWeight: '600' }]}>
+              {tabletMode.charAt(0).toUpperCase() + tabletMode.slice(1)}
+            </Text>
           </View>
         </TouchableOpacity>
 
@@ -177,21 +209,46 @@ export default function AppearanceScreen() {
             thumbColor="#FFFFFF"
           />
         </View>
-
-        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <View style={styles.settingLabelContainer}>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
-              Render images in manga descriptions
-            </Text>
-          </View>
-          <Switch
-            value={renderImagesInDesc}
-            onValueChange={setRenderImagesInDesc}
-            trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
       </ScrollView>
+
+      {/* Tablet UI / Landscape Dialog Modal (Matching Screenshot #5) */}
+      <Modal visible={showTabletModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Tablet UI & Orientation</Text>
+
+            {[
+              { id: 'auto', label: 'Auto' },
+              { id: 'always', label: 'Always' },
+              { id: 'landscape', label: 'Landscape' },
+              { id: 'never', label: 'Never' },
+            ].map((opt) => {
+              const isSelected = tabletMode === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[
+                    styles.radioRow,
+                    { borderBottomColor: colors.border },
+                  ]}
+                  onPress={() => handleSelectTabletMode(opt.id as any)}
+                >
+                  <View style={[styles.radioCircle, { borderColor: isSelected ? colors.primary : colors.border }]}>
+                    {isSelected && <View style={[styles.radioDot, { backgroundColor: colors.primary }]} />}
+                  </View>
+                  <Text style={[styles.radioText, { color: colors.textPrimary }, isSelected && { fontWeight: '700' }]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+
+            <TouchableOpacity style={styles.cancelModalBtn} onPress={() => setShowTabletModal(false)}>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -313,5 +370,53 @@ const styles = StyleSheet.create({
   settingSub: {
     fontSize: 12,
     marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '90%',
+    maxWidth: 340,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  radioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  radioText: {
+    fontSize: 15,
+  },
+  cancelModalBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
 });
