@@ -7,6 +7,11 @@
     "icon": "./assets/images/icon.png",
     "scheme": "readme",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#16131B"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.readme.pdfreader"
@@ -32,6 +37,7 @@
       [
         "expo-splash-screen",
         {
+          "image": "./assets/images/splash-icon.png",
           "backgroundColor": "#16131B",
           "imageWidth": 120
         }
