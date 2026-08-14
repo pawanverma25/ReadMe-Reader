@@ -52,7 +52,7 @@ export default function HistoryScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.startReadingBtn, { backgroundColor: colors.primary }]}
-            onPress={() => router.push('/(tabs)/index')}
+            onPress={() => router.push('/(tabs)')}
           >
             <Text style={[styles.btnText, { color: colors.onPrimary }]}>Open Library</Text>
           </TouchableOpacity>

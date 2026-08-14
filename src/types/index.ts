@@ -56,6 +56,9 @@ export interface ReaderSettings {
   volumeKeyNavigation: boolean;
   showActionsOnLongTap: boolean;
   invertTapZones: boolean;
+  incognitoMode?: boolean;
+  grayscale?: boolean;
+  inverted?: boolean;
 }
 
 export interface BackupData {

@@ -31,7 +31,7 @@ export default function ReaderScreen() {
   }, [book?.id]);
 
   if (!book) {
-    router.replace('/(tabs)/index');
+    router.replace('/(tabs)');
     return null;
   }
 

@@ -79,7 +79,12 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return newBook;
   };
 
-  const updateBookProgress = async (bookId: string, page: number, totalPages?: number) => {
+  const updateBookProgress = async (
+    bookId: string,
+    page: number,
+    totalPages?: number,
+    isIncognito?: boolean
+  ) => {
     const updated = books.map((b) => {
       if (b.id !== bookId) return b;
       const tPages = totalPages || b.totalPages || 1;
@@ -92,8 +97,8 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         currentPage: targetPage,
         totalPages: tPages,
         status,
-        lastReadAt: new Date().toISOString(),
-        readingTimeMinutes: b.readingTimeMinutes + 1,
+        lastReadAt: isIncognito ? b.lastReadAt : new Date().toISOString(),
+        readingTimeMinutes: isIncognito ? b.readingTimeMinutes : b.readingTimeMinutes + 1,
       };
     });
 

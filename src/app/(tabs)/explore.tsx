@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -12,15 +11,12 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLibrary } from '../../contexts/LibraryContext';
-import { SAMPLE_BOOKS } from '../../utils/sampleData';
+import { AlertConfig, ThemedAlert } from '../../components/common/ThemedAlert';
 import {
   BookPlus,
   Compass,
-  FileDown,
   FolderOpen,
   HardDrive,
-  Sparkles,
-  CheckCircle,
 } from 'lucide-react-native';
 
 export default function ExploreScreen() {
@@ -28,12 +24,26 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { books, categories, addBook } = useLibrary();
   const [importing, setImporting] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
+  const showAlert = (config: Omit<AlertConfig, 'visible'>) => {
+    setAlertConfig({ ...config, visible: true });
+  };
+
+  const hideAlert = () => {
+    setAlertConfig((prev) => ({ ...prev, visible: false }));
+  };
 
   const handlePickDocument = async () => {
     try {
       setImporting(true);
+      // Strictly filter to PDF documents
       const res = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', '*/*'],
+        type: 'application/pdf',
         copyToCacheDirectory: true,
       });
 
@@ -44,53 +54,43 @@ export default function ExploreScreen() {
 
         const newBook = await addBook({
           title,
-          author: 'Local File',
+          author: 'Local PDF File',
           uri: file.uri,
           fileSize: file.size || 2500000,
-          totalPages: 36,
+          totalPages: 40,
           coverColor: colors.primary,
-          description: `Imported from local storage (${file.name})`,
+          description: `Imported from local file storage (${file.name})`,
           categoryIds: ['cat-all'],
         });
 
-        Alert.alert('Book Imported', `"${title}" has been added to your library!`, [
-          { text: 'Read Now', onPress: () => router.push(`/reader/${newBook.id}`) },
-          { text: 'OK' },
-        ]);
+        showAlert({
+          title: 'PDF Imported Successfully',
+          message: `"${title}" has been added to your local library!`,
+          type: 'success',
+          confirmText: 'Read Now',
+          cancelText: 'Library',
+          onConfirm: () => {
+            hideAlert();
+            router.push(`/reader/${newBook.id}`);
+          },
+          onCancel: () => {
+            hideAlert();
+            router.push('/(tabs)');
+          },
+        });
       }
     } catch (error) {
-      console.error('File pick error:', error);
-      Alert.alert('Error', 'Failed to pick document.');
+      console.error('PDF file pick error:', error);
+      showAlert({
+        title: 'Import Error',
+        message: 'Could not import selected PDF file. Please select a valid .pdf file.',
+        type: 'error',
+        confirmText: 'OK',
+        onConfirm: hideAlert,
+      });
     } finally {
       setImporting(false);
     }
-  };
-
-  const handleImportSample = async (sampleBook: typeof SAMPLE_BOOKS[0]) => {
-    const existing = books.find((b) => b.title === sampleBook.title);
-    if (existing) {
-      Alert.alert('Already in Library', `"${sampleBook.title}" is already in your library.`, [
-        { text: 'Open Reader', onPress: () => router.push(`/reader/${existing.id}`) },
-        { text: 'OK' },
-      ]);
-      return;
-    }
-
-    const added = await addBook({
-      title: sampleBook.title,
-      author: sampleBook.author,
-      description: sampleBook.description,
-      uri: sampleBook.uri,
-      fileSize: sampleBook.fileSize,
-      totalPages: sampleBook.totalPages,
-      coverColor: sampleBook.coverColor,
-      categoryIds: sampleBook.categoryIds,
-    });
-
-    Alert.alert('Sample Added', `"${added.title}" added to your library.`, [
-      { text: 'Start Reading', onPress: () => router.push(`/reader/${added.id}`) },
-      { text: 'OK' },
-    ]);
   };
 
   const totalReadingMins = books.reduce((acc, b) => acc + (b.readingTimeMinutes || 0), 0);
@@ -99,9 +99,9 @@ export default function ExploreScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Explore & Add Books</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Import PDF Books</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Import local PDF files or sample catalogs
+          Add local PDF eBooks & document files
         </Text>
       </View>
 
@@ -114,6 +114,7 @@ export default function ExploreScreen() {
           ]}
           onPress={handlePickDocument}
           activeOpacity={0.8}
+          disabled={importing}
         >
           <View style={[styles.heroIconBg, { backgroundColor: colors.primary }]}>
             <FolderOpen size={28} color={colors.onPrimary} />
@@ -121,10 +122,10 @@ export default function ExploreScreen() {
 
           <View style={styles.heroTextContainer}>
             <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-              Pick PDF from Device
+              {importing ? 'Importing PDF...' : 'Select PDF File from Device'}
             </Text>
             <Text style={[styles.heroDesc, { color: colors.textSecondary }]}>
-              Select any local PDF file from your phone storage or Downloads folder.
+              Tap to browse your device files and select any .pdf book or document.
             </Text>
           </View>
 
@@ -143,14 +144,14 @@ export default function ExploreScreen() {
           <View style={styles.statsHeader}>
             <HardDrive size={18} color={colors.primary} />
             <Text style={[styles.statsHeaderTitle, { color: colors.textPrimary }]}>
-              Library Statistics
+              Library Overview
             </Text>
           </View>
 
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
               <Text style={[styles.statNum, { color: colors.primary }]}>{books.length}</Text>
-              <Text style={[styles.statLbl, { color: colors.textSecondary }]}>Books</Text>
+              <Text style={[styles.statLbl, { color: colors.textSecondary }]}>PDF Books</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statNum, { color: colors.primary }]}>{categories.length}</Text>
@@ -166,64 +167,10 @@ export default function ExploreScreen() {
             </View>
           </View>
         </View>
-
-        {/* Sample Book Catalog Section */}
-        <View style={styles.sectionHeader}>
-          <Sparkles size={18} color={colors.primary} />
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Sample eBooks Catalog
-          </Text>
-        </View>
-        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-          Tap to add sample PDF eBooks with pre-configured webtoon continuous scrolling & metadata.
-        </Text>
-
-        {SAMPLE_BOOKS.map((sample) => {
-          const isAdded = books.some((b) => b.title === sample.title);
-
-          return (
-            <TouchableOpacity
-              key={sample.id}
-              style={[
-                styles.sampleCard,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-              onPress={() => handleImportSample(sample)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.sampleCover, { backgroundColor: sample.coverColor || colors.primary }]}>
-                <Text style={styles.sampleCoverText}>
-                  {sample.title.substring(0, 2).toUpperCase()}
-                </Text>
-              </View>
-
-              <View style={styles.sampleDetails}>
-                <Text style={[styles.sampleTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {sample.title}
-                </Text>
-                <Text style={[styles.sampleAuthor, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {sample.author}
-                </Text>
-                <Text style={[styles.sampleDesc, { color: colors.textSecondary }]} numberOfLines={2}>
-                  {sample.description}
-                </Text>
-              </View>
-
-              <View style={styles.sampleAction}>
-                {isAdded ? (
-                  <View style={[styles.addedBadge, { backgroundColor: '#4CAF50' }]}>
-                    <CheckCircle size={16} color="#FFFFFF" />
-                  </View>
-                ) : (
-                  <View style={[styles.addBadge, { backgroundColor: colors.primary }]}>
-                    <FileDown size={16} color={colors.onPrimary} />
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
       </ScrollView>
+
+      {/* Themed Mihon Alert */}
+      <ThemedAlert {...alertConfig} />
     </SafeAreaView>
   );
 }
@@ -252,15 +199,15 @@ const styles = StyleSheet.create({
   heroCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 18,
     borderRadius: 16,
     borderWidth: 1,
     marginBottom: 16,
   },
   heroIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -275,17 +222,16 @@ const styles = StyleSheet.create({
   },
   heroDesc: {
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 3,
     lineHeight: 16,
   },
   heroActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Stats
   statsCard: {
     padding: 16,
     borderRadius: 16,
@@ -316,76 +262,5 @@ const styles = StyleSheet.create({
   statLbl: {
     fontSize: 11,
     marginTop: 2,
-  },
-  // Catalog
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    marginBottom: 12,
-    lineHeight: 16,
-  },
-  sampleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  sampleCover: {
-    width: 44,
-    height: 60,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sampleCoverText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  sampleDetails: {
-    flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
-  },
-  sampleTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  sampleAuthor: {
-    fontSize: 11,
-    marginTop: 1,
-  },
-  sampleDesc: {
-    fontSize: 11,
-    marginTop: 3,
-    lineHeight: 14,
-  },
-  sampleAction: {
-    padding: 4,
-  },
-  addBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addedBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });

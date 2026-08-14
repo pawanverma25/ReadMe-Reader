@@ -3,6 +3,7 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -16,11 +17,12 @@ import {
   BookmarkCheck,
   ChevronLeft,
   ChevronRight,
+  Eye,
   ListOrdered,
-  Moon,
-  RotateCcw,
-  Settings as SettingsIcon,
-  Sun,
+  Maximize2,
+  Minimize2,
+  Sliders,
+  SlidersHorizontal,
   X,
 } from 'lucide-react-native';
 
@@ -35,6 +37,8 @@ interface ReaderOverlayProps {
   onToggleBookmark: () => void;
   onUpdateSettings: (newSettings: Partial<ReaderSettings>) => void;
 }
+
+type ReaderSheetTab = 'reading_mode' | 'general' | 'custom_filter';
 
 export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
   book,
@@ -51,6 +55,8 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
   const [showJumpModal, setShowJumpModal] = useState(false);
   const [jumpPageInput, setJumpPageInput] = useState('');
   const [showBookmarksModal, setShowBookmarksModal] = useState(false);
+  const [showReaderSettingsSheet, setShowReaderSettingsSheet] = useState(false);
+  const [activeSheetTab, setActiveSheetTab] = useState<ReaderSheetTab>('reading_mode');
 
   if (!visible) return null;
 
@@ -98,6 +104,14 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
             activeOpacity={0.7}
           >
             <ListOrdered size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => setShowReaderSettingsSheet(true)}
+            activeOpacity={0.7}
+          >
+            <SlidersHorizontal size={22} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -315,6 +329,189 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Mihon In-Reader Bottom Settings Sheet (Matching Screenshots #16, #17, #18, #19, #20) */}
+      <Modal visible={showReaderSettingsSheet} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.readerSettingsSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {/* Sheet Tabs Header */}
+            <View style={[styles.sheetTabsHeader, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity
+                style={[styles.sheetTab, activeSheetTab === 'reading_mode' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+                onPress={() => setActiveSheetTab('reading_mode')}
+              >
+                <Text
+                  style={[
+                    styles.sheetTabText,
+                    { color: colors.textSecondary },
+                    activeSheetTab === 'reading_mode' && { color: colors.primary, fontWeight: '700' },
+                  ]}
+                >
+                  Reading mode
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sheetTab, activeSheetTab === 'general' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+                onPress={() => setActiveSheetTab('general')}
+              >
+                <Text
+                  style={[
+                    styles.sheetTabText,
+                    { color: colors.textSecondary },
+                    activeSheetTab === 'general' && { color: colors.primary, fontWeight: '700' },
+                  ]}
+                >
+                  General
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sheetTab, activeSheetTab === 'custom_filter' && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
+                onPress={() => setActiveSheetTab('custom_filter')}
+              >
+                <Text
+                  style={[
+                    styles.sheetTabText,
+                    { color: colors.textSecondary },
+                    activeSheetTab === 'custom_filter' && { color: colors.primary, fontWeight: '700' },
+                  ]}
+                >
+                  Custom filter
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Sheet Tab Contents */}
+            <ScrollView style={{ maxHeight: 380, paddingVertical: 12 }}>
+              {activeSheetTab === 'reading_mode' && (
+                <View>
+                  <Text style={[styles.sheetSectionTitle, { color: colors.primary }]}>Reading mode</Text>
+                  <View style={styles.pillsRow}>
+                    {(['long_strip', 'single_page_h', 'single_page_v'] as ReadingMode[]).map((m) => {
+                      const isActive = settings.readingMode === m;
+                      const label = m === 'long_strip' ? 'Long strip' : m === 'single_page_h' ? 'Paged (LTR)' : 'Paged (Vertical)';
+                      return (
+                        <TouchableOpacity
+                          key={m}
+                          style={[
+                            styles.optionPill,
+                            { backgroundColor: colors.surface, borderColor: colors.border },
+                            isActive && { backgroundColor: colors.primary, borderColor: colors.primary },
+                          ]}
+                          onPress={() => onUpdateSettings({ readingMode: m })}
+                        >
+                          <Text style={[styles.optionPillText, { color: isActive ? colors.onPrimary : colors.textPrimary }]}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={[styles.sheetSectionTitle, { color: colors.primary, marginTop: 16 }]}>Side padding ({settings.sidePadding}%)</Text>
+                  <View style={styles.sliderButtonsRow}>
+                    {[0, 5, 10, 15, 20, 25].map((pad) => (
+                      <TouchableOpacity
+                        key={pad}
+                        style={[
+                          styles.padChip,
+                          { backgroundColor: colors.surface },
+                          settings.sidePadding === pad && { backgroundColor: colors.primary },
+                        ]}
+                        onPress={() => onUpdateSettings({ sidePadding: pad })}
+                      >
+                        <Text style={[styles.padChipText, { color: settings.sidePadding === pad ? colors.onPrimary : colors.textPrimary }]}>
+                          {pad}%
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {activeSheetTab === 'general' && (
+                <View>
+                  <Text style={[styles.sheetSectionTitle, { color: colors.primary }]}>Background color</Text>
+                  <View style={styles.pillsRow}>
+                    {(['oled', 'dark', 'sepia', 'light'] as ReaderTheme[]).map((thm) => {
+                      const isActive = settings.readerTheme === thm;
+                      return (
+                        <TouchableOpacity
+                          key={thm}
+                          style={[
+                            styles.optionPill,
+                            { backgroundColor: colors.surface, borderColor: colors.border },
+                            isActive && { backgroundColor: colors.primary, borderColor: colors.primary },
+                          ]}
+                          onPress={() => onUpdateSettings({ readerTheme: thm })}
+                        >
+                          <Text style={[styles.optionPillText, { color: isActive ? colors.onPrimary : colors.textPrimary }]}>
+                            {thm.toUpperCase()}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <View style={[styles.settingRowSheet, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.settingTitleSheet, { color: colors.textPrimary }]}>Keep screen on</Text>
+                    <Switch
+                      value={settings.keepScreenOn}
+                      onValueChange={(keepScreenOn) => onUpdateSettings({ keepScreenOn })}
+                      trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
+
+                  <View style={[styles.settingRowSheet, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.settingTitleSheet, { color: colors.textPrimary }]}>Double tap to zoom</Text>
+                    <Switch
+                      value={settings.doubleTapToZoom}
+                      onValueChange={(doubleTapToZoom) => onUpdateSettings({ doubleTapToZoom })}
+                      trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
+                </View>
+              )}
+
+              {activeSheetTab === 'custom_filter' && (
+                <View>
+                  <Text style={[styles.sheetSectionTitle, { color: colors.primary }]}>Display Filters</Text>
+
+                  <View style={[styles.settingRowSheet, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.settingTitleSheet, { color: colors.textPrimary }]}>Grayscale (Black & White)</Text>
+                    <Switch
+                      value={Boolean(settings.grayscale)}
+                      onValueChange={(grayscale) => onUpdateSettings({ grayscale })}
+                      trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
+
+                  <View style={[styles.settingRowSheet, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.settingTitleSheet, { color: colors.textPrimary }]}>Inverted Colors (Night Mode)</Text>
+                    <Switch
+                      value={Boolean(settings.inverted)}
+                      onValueChange={(inverted) => onUpdateSettings({ inverted })}
+                      trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.closeSheetBtn, { backgroundColor: colors.primary }]}
+              onPress={() => setShowReaderSettingsSheet(false)}
+            >
+              <Text style={{ color: colors.onPrimary, fontWeight: '700', fontSize: 14 }}>Apply & Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -521,5 +718,80 @@ const styles = StyleSheet.create({
   bmDate: {
     fontSize: 11,
     marginTop: 2,
+  },
+  // Mihon In-Reader Settings Sheet Styles
+  readerSettingsSheet: {
+    width: '100%',
+    maxWidth: 460,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+  },
+  sheetTabsHeader: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    marginBottom: 12,
+  },
+  sheetTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  sheetTabText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  sheetSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  pillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  optionPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  optionPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sliderButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  padChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  padChipText: {
+    fontSize: 11,
+  },
+  settingRowSheet: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+  },
+  settingTitleSheet: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  closeSheetBtn: {
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 14,
   },
 });

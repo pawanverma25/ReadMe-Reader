@@ -39,6 +39,13 @@ export default function SettingsScreen() {
       route: '/category-manager',
     },
     {
+      id: 'statistics',
+      title: 'Statistics',
+      subtitle: 'Reading duration, total books, completed entries',
+      icon: Terminal,
+      route: '/settings/statistics',
+    },
+    {
       id: 'reader',
       title: 'Reader',
       subtitle: 'Reading mode, display, navigation',

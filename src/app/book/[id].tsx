@@ -62,7 +62,7 @@ export default function BookDetailsScreen() {
         style: 'destructive',
         onPress: async () => {
           await deleteBook(book.id);
-          router.replace('/(tabs)/index');
+          router.replace('/(tabs)');
         },
       },
     ]);

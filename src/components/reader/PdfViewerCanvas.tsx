@@ -20,12 +20,36 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 }) => {
   const webViewRef = useRef<WebView>(null);
 
-  // Generate HTML canvas document with PDF rendering engine
+  // Background color based on readerTheme setting
+  const getBgColor = () => {
+    switch (settings.readerTheme) {
+      case 'oled':
+        return '#000000';
+      case 'dark':
+        return '#16131B';
+      case 'sepia':
+        return '#F4ECD8';
+      case 'light':
+        return '#FFFFFF';
+      default:
+        return '#000000';
+    }
+  };
+
+  // Filter style (grayscale / inverted)
+  const getFilterStyle = () => {
+    let filters: string[] = [];
+    if (settings.grayscale) filters.push('grayscale(100%)');
+    if (settings.inverted) filters.push('invert(100%) hue-rotate(180deg)');
+    return filters.length > 0 ? filters.join(' ') : 'none';
+  };
+
   const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -35,15 +59,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       padding: 0;
     }
     body {
-      background-color: ${
-        settings.readerTheme === 'oled'
-          ? '#000000'
-          : settings.readerTheme === 'dark'
-          ? '#16131B'
-          : settings.readerTheme === 'sepia'
-          ? '#F4ECD8'
-          : '#FFFFFF'
-      };
+      background-color: ${getBgColor()};
       color: ${settings.readerTheme === 'light' || settings.readerTheme === 'sepia' ? '#111111' : '#FFFFFF'};
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       overflow-x: hidden;
@@ -64,60 +80,53 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     .long-strip {
       display: flex;
       flex-direction: column;
-      gap: ${settings.cropBorders ? '0px' : '12px'};
-      padding: 12px 0;
+      gap: ${settings.cropBorders ? '0px' : '10px'};
+      padding: 10px 0;
       width: 100%;
+      align-items: center;
     }
 
-    /* Single Page layout */
-    .single-page-wrapper {
+    /* Single Page Slider & Swipe Animation */
+    .single-page-viewport {
       width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .single-page-slider {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+      will-change: transform;
+    }
+
+    .page-wrapper {
+      min-width: 100vw;
       height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      position: relative;
+      padding: 12px;
     }
 
-    .page-card {
-      background: ${settings.readerTheme === 'light' ? '#FFFFFF' : '#1E1926'};
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      border-radius: 8px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      width: 92%;
-      max-width: 800px;
-      min-height: 80vh;
-      padding: 24px;
-      margin: 0 auto;
+    canvas {
+      max-width: 100%;
+      max-height: 95vh;
+      height: auto;
+      object-fit: contain;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      border-radius: 4px;
+      filter: ${getFilterStyle()};
+      transition: filter 0.2s ease;
     }
 
-    .page-content {
-      width: 100%;
-      text-align: left;
-      line-height: 1.6;
-    }
-
-    .page-header {
-      font-size: 20px;
-      font-weight: 700;
-      color: ${settings.readerTheme === 'sepia' ? '#624B36' : settings.readerTheme === 'light' ? '#D81B60' : '#EC407A'};
-      margin-bottom: 16px;
-      border-bottom: 2px solid rgba(236, 64, 122, 0.2);
-      padding-bottom: 8px;
-    }
-
-    .page-number-indicator {
-      margin-top: 20px;
-      font-size: 13px;
-      font-weight: 600;
-      opacity: 0.6;
-      text-align: center;
-    }
-
+    /* Tap zones for gestures */
     .tap-zone-left, .tap-zone-right, .tap-zone-center {
       position: fixed;
       top: 0;
@@ -128,35 +137,56 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     .tap-zone-center { left: 25%; width: 50%; }
     .tap-zone-right { right: 0; width: 25%; }
 
-    p {
-      margin-bottom: 14px;
+    .loading-spinner {
+      margin-top: 40vh;
       font-size: 16px;
+      font-weight: 600;
+      opacity: 0.7;
     }
   </style>
 </head>
 <body>
-  <div id="app" class="container"></div>
+  <div id="app" class="container">
+    <div class="loading-spinner" id="loader">Loading PDF Document...</div>
+  </div>
 
-  <div class="tap-zone-left" onclick="handleTap('left')"></div>
-  <div class="tap-zone-center" onclick="handleTap('center')"></div>
-  <div class="tap-zone-right" onclick="handleTap('right')"></div>
+  <div class="tap-zone-left" id="zone-left"></div>
+  <div class="tap-zone-center" id="zone-center"></div>
+  <div class="tap-zone-right" id="zone-right"></div>
 
   <script>
-    let totalPages = ${book.totalPages || 40};
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    let pdfDoc = null;
+    let totalPages = 0;
     let currentPage = ${currentPage || 1};
     let readingMode = "${settings.readingMode}";
-    let bookTitle = "${book.title.replace(/"/g, '\\"')}";
+    let pdfUri = "${book.uri}";
+    let touchStartX = 0;
+    let touchEndX = 0;
 
-    const paragraphsSample = [
-      "Welcome to ReadMe - your offline-first immersive PDF book reader. Built with Expo, TypeScript, and inspired by Mihon's modern Android user interface.",
-      "The reader architecture provides smooth multi-mode document viewing with full support for vertical long-strip scrolling (popularized by modern webtoons and digital manga) as well as single-page flip navigation.",
-      "All reading progress, current page offset, bookmarks, ratings, and custom categories are saved locally on your device with high performance.",
-      "You can export your complete library and reading history into a standard JSON backup file and seamlessly restore it on any Android or web device without requiring online account sync.",
-      "Customize tap zones, theme colors (including pure OLED pitch black mode), crop borders, zoom sensitivity, side padding, and volume key page scrolling in Settings.",
-      "Mihon's expressive Material You layout ensures effortless navigation, quick category tabs filtering, search, and reading progress history tracking."
-    ];
+    // Load PDF file
+    async function loadPDF() {
+      try {
+        if (!pdfUri || pdfUri.startsWith('sample://')) {
+          renderFallbackPDF();
+          return;
+        }
 
-    function renderPage(pageNum) {
+        const loadingTask = pdfjsLib.getDocument(pdfUri);
+        pdfDoc = await loadingTask.promise;
+        totalPages = pdfDoc.numPages;
+        
+        document.getElementById('loader').style.display = 'none';
+        renderView();
+        notifyPageChange();
+      } catch (err) {
+        console.error('PDF JS load error:', err);
+        renderFallbackPDF();
+      }
+    }
+
+    function renderView() {
       const app = document.getElementById('app');
       app.innerHTML = '';
 
@@ -164,68 +194,164 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         const strip = document.createElement('div');
         strip.className = 'long-strip';
         for (let i = 1; i <= totalPages; i++) {
-          const card = createPageCard(i);
-          card.id = 'page-' + i;
-          strip.appendChild(card);
+          const wrapper = document.createElement('div');
+          wrapper.id = 'page-wrapper-' + i;
+          wrapper.className = 'page-wrapper';
+          const canvas = document.createElement('canvas');
+          canvas.id = 'page-canvas-' + i;
+          wrapper.appendChild(canvas);
+          strip.appendChild(wrapper);
+          renderPageCanvas(i, canvas);
         }
         app.appendChild(strip);
 
-        // Scroll to initial page
         setTimeout(() => {
-          const target = document.getElementById('page-' + pageNum);
+          const target = document.getElementById('page-wrapper-' + currentPage);
           if (target) target.scrollIntoView({ behavior: 'auto' });
-        }, 100);
+        }, 150);
       } else {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'single-page-wrapper';
-        const card = createPageCard(pageNum);
-        wrapper.appendChild(card);
-        app.appendChild(wrapper);
+        // Single Page mode with smooth horizontal touch swipe transition animation
+        const viewport = document.createElement('div');
+        viewport.className = 'single-page-viewport';
+
+        const slider = document.createElement('div');
+        slider.className = 'single-page-slider';
+        slider.id = 'page-slider';
+
+        for (let i = 1; i <= totalPages; i++) {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'page-wrapper';
+          const canvas = document.createElement('canvas');
+          canvas.id = 'page-canvas-' + i;
+          wrapper.appendChild(canvas);
+          slider.appendChild(wrapper);
+          renderPageCanvas(i, canvas);
+        }
+
+        viewport.appendChild(slider);
+        app.appendChild(viewport);
+
+        updateSliderPosition();
+        setupSwipeGestures(viewport);
       }
     }
 
-    function createPageCard(num) {
-      const card = document.createElement('div');
-      card.className = 'page-card';
+    async function renderPageCanvas(pageNum, canvas) {
+      if (!pdfDoc) return;
+      try {
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
+      } catch (e) {
+        console.error('Page render error:', e);
+      }
+    }
+
+    function updateSliderPosition() {
+      const slider = document.getElementById('page-slider');
+      if (slider) {
+        const offset = (currentPage - 1) * -100;
+        slider.style.transform = 'translateX(' + offset + 'vw)';
+      }
+    }
+
+    function setupSwipeGestures(element) {
+      element.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+      }, false);
+
+      element.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+      }, false);
+    }
+
+    function handleSwipe() {
+      const diff = touchEndX - touchStartX;
+      if (Math.abs(diff) > 50) {
+        if (diff < 0) {
+          nextPage(); // Swipe Left -> Next Page
+        } else {
+          prevPage(); // Swipe Right -> Prev Page
+        }
+      }
+    }
+
+    function renderFallbackPDF() {
+      const loader = document.getElementById('loader');
+      if (loader) loader.style.display = 'none';
+      totalPages = ${book.totalPages || 30};
       
-      const header = document.createElement('div');
-      header.className = 'page-header';
-      header.innerText = bookTitle + ' — Page ' + num;
-      card.appendChild(header);
+      const app = document.getElementById('app');
+      app.innerHTML = '';
 
-      const content = document.createElement('div');
-      content.className = 'page-content';
+      if (readingMode === 'long_strip') {
+        const strip = document.createElement('div');
+        strip.className = 'long-strip';
+        for (let i = 1; i <= totalPages; i++) {
+          strip.appendChild(createMockCard(i));
+        }
+        app.appendChild(strip);
+      } else {
+        const viewport = document.createElement('div');
+        viewport.className = 'single-page-viewport';
+        const slider = document.createElement('div');
+        slider.className = 'single-page-slider';
+        slider.id = 'page-slider';
+        for (let i = 1; i <= totalPages; i++) {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'page-wrapper';
+          wrapper.appendChild(createMockCard(i));
+          slider.appendChild(wrapper);
+        }
+        viewport.appendChild(slider);
+        app.appendChild(viewport);
+        updateSliderPosition();
+        setupSwipeGestures(viewport);
+      }
+    }
+
+    function createMockCard(num) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 600;
+      canvas.height = 800;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '${settings.readerTheme === 'light' ? '#FFFFFF' : settings.readerTheme === 'sepia' ? '#F4ECD8' : '#1E1926'}';
+      ctx.fillRect(0, 0, 600, 800);
       
-      for (let j = 0; j < 4; j++) {
-        const p = document.createElement('p');
-        const textIdx = (num * 3 + j) % paragraphsSample.length;
-        p.innerText = paragraphsSample[textIdx];
-        content.appendChild(p);
-      }
-      card.appendChild(content);
+      ctx.fillStyle = '#EC407A';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText("${book.title.replace(/"/g, '\\"')}", 40, 60);
 
-      const footer = document.createElement('div');
-      footer.className = 'page-number-indicator';
-      footer.innerText = '- Page ' + num + ' of ' + totalPages + ' -';
-      card.appendChild(footer);
-
-      return card;
+      ctx.fillStyle = '${settings.readerTheme === 'light' ? '#222222' : '#EEEEEE'}';
+      ctx.font = '18px sans-serif';
+      ctx.fillText("PDF Page " + num + " of " + totalPages, 40, 110);
+      return canvas;
     }
 
-    function handleTap(zone) {
-      if (zone === 'center') {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOGGLE_OVERLAY' }));
-      } else if (zone === 'right') {
-        if (readingMode !== 'long_strip') nextPage();
-      } else if (zone === 'left') {
-        if (readingMode !== 'long_strip') prevPage();
-      }
-    }
+    document.getElementById('zone-center').onclick = () => {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOGGLE_OVERLAY' }));
+    };
+    document.getElementById('zone-right').onclick = () => {
+      if (readingMode !== 'long_strip') nextPage();
+    };
+    document.getElementById('zone-left').onclick = () => {
+      if (readingMode !== 'long_strip') prevPage();
+    };
 
     function nextPage() {
       if (currentPage < totalPages) {
         currentPage++;
-        renderPage(currentPage);
+        if (readingMode === 'long_strip') {
+          const target = document.getElementById('page-wrapper-' + currentPage);
+          if (target) target.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          updateSliderPosition();
+        }
         notifyPageChange();
       }
     }
@@ -233,7 +359,12 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     function prevPage() {
       if (currentPage > 1) {
         currentPage--;
-        renderPage(currentPage);
+        if (readingMode === 'long_strip') {
+          const target = document.getElementById('page-wrapper-' + currentPage);
+          if (target) target.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          updateSliderPosition();
+        }
         notifyPageChange();
       }
     }
@@ -246,40 +377,24 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       }));
     }
 
-    // Scroll listener for long strip mode
-    window.addEventListener('scroll', () => {
-      if (readingMode === 'long_strip') {
-        const pageCards = document.querySelectorAll('.page-card');
-        pageCards.forEach((card, index) => {
-          const rect = card.getBoundingClientRect();
-          if (rect.top >= 0 && rect.top <= window.innerHeight / 2) {
-            const pageNum = index + 1;
-            if (pageNum !== currentPage) {
-              currentPage = pageNum;
-              notifyPageChange();
-            }
-          }
-        });
-      }
-    });
-
-    // Handle messages from React Native app
+    // Window message listener from RN
     window.addEventListener('message', (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.action === 'JUMP_TO_PAGE') {
           currentPage = data.page;
-          renderPage(currentPage);
+          if (readingMode === 'long_strip') {
+            const target = document.getElementById('page-wrapper-' + currentPage);
+            if (target) target.scrollIntoView({ behavior: 'auto' });
+          } else {
+            updateSliderPosition();
+          }
           notifyPageChange();
-        } else if (data.action === 'SET_READING_MODE') {
-          readingMode = data.mode;
-          renderPage(currentPage);
         }
       } catch (e) {}
     });
 
-    // Initial Render
-    renderPage(currentPage);
+    loadPDF();
   </script>
 </body>
 </html>
@@ -294,7 +409,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         onPageChange(data.page, data.totalPages);
       }
     } catch (e) {
-      console.error('WebView postMessage parse error:', e);
+      console.error('WebView postMessage error:', e);
     }
   };
 
@@ -311,6 +426,9 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         overScrollMode="never"
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
+        allowFileAccess={true}
+        allowFileAccessFromFileURLs={true}
+        allowUniversalAccessFromFileURLs={true}
       />
     </View>
   );
