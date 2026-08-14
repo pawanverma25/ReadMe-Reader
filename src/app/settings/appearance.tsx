@@ -25,6 +25,11 @@ export default function AppearanceScreen() {
     { id: 'dynamic', name: 'Dynamic', primaryColor: '#2DD4BF', bgNav: '#1D2F2F' },
     { id: 'catppuccin', name: 'Catppuccin', primaryColor: '#C6A0F6', bgNav: '#313244' },
     { id: 'green_apple', name: 'Green Apple', primaryColor: '#4ADE80', bgNav: '#1E2F26' },
+    { id: 'nord', name: 'Nord', primaryColor: '#88C0D0', bgNav: '#2E3440' },
+    { id: 'tokyo_night', name: 'Tokyo Night', primaryColor: '#7AA2F7', bgNav: '#24283B' },
+    { id: 'dracula', name: 'Dracula', primaryColor: '#FF79C6', bgNav: '#343746' },
+    { id: 'solarized', name: 'Solarized', primaryColor: '#B58900', bgNav: '#073642' },
+    { id: 'sepia', name: 'Sepia Warm', primaryColor: '#D97706', bgNav: '#292524' },
   ];
 
   return (
@@ -115,6 +120,9 @@ export default function AppearanceScreen() {
           <View style={styles.settingLabelContainer}>
             <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
               Pure black dark mode
+            </Text>
+            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>
+              Pitch black backgrounds for OLED screens
             </Text>
           </View>
           <Switch

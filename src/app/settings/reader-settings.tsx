@@ -25,66 +25,25 @@ export default function ReaderSettingsScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Reader</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Reader Settings</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Section: Reading */}
-        <Text style={[styles.sectionLabel, { color: colors.primary }]}>Reading</Text>
-
-        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
-            Skip chapters marked read
-          </Text>
-          <Switch
-            value={false}
-            trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-
-        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
-            Skip filtered chapters
-          </Text>
-          <Switch
-            value={true}
-            trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-
-        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
-            Always show chapter transition
-          </Text>
-          <Switch
-            value={true}
-            trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-
-        {/* Section: Paged */}
-        <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 24 }]}>Paged</Text>
+        {/* Section: Reading Mode */}
+        <Text style={[styles.sectionLabel, { color: colors.primary }]}>Reading Mode</Text>
 
         <TouchableOpacity style={[styles.settingRow, { borderBottomColor: colors.border }]}>
           <View>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Tap zones</Text>
-            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Default</Text>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Default reading mode</Text>
+            <Text style={[styles.settingSub, { color: colors.primary, fontWeight: '700' }]}>
+              {settings.readingMode === 'long_strip' ? 'Long strip (Continuous)' : 'Single Page'}
+            </Text>
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <View>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Scale type</Text>
-            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Fit screen</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Section: Long Strip */}
+        {/* Section: Long Strip Options */}
         <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 24 }]}>
-          Long strip
+          Long strip layout
         </Text>
 
         {/* Side Padding Slider Bar */}
@@ -129,7 +88,10 @@ export default function ReaderSettingsScreen() {
         </View>
 
         <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Crop borders</Text>
+          <View style={styles.labelWrapper}>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Crop borders</Text>
+            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Remove blank page margins</Text>
+          </View>
           <Switch
             value={settings.cropBorders}
             onValueChange={(cropBorders) => updateSettings({ cropBorders })}
@@ -139,17 +101,10 @@ export default function ReaderSettingsScreen() {
         </View>
 
         <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Split wide pages</Text>
-          <Switch
-            value={settings.splitWidePages}
-            onValueChange={(splitWidePages) => updateSettings({ splitWidePages })}
-            trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-
-        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Double tap to zoom</Text>
+          <View style={styles.labelWrapper}>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Double tap to zoom</Text>
+            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Quick zoom in/out gesture</Text>
+          </View>
           <Switch
             value={settings.doubleTapToZoom}
             onValueChange={(doubleTapToZoom) => updateSettings({ doubleTapToZoom })}
@@ -158,13 +113,18 @@ export default function ReaderSettingsScreen() {
           />
         </View>
 
-        {/* Section: Navigation */}
+        {/* Section: Display & Gestures */}
         <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 24 }]}>
-          Navigation
+          Display & Navigation
         </Text>
 
         <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Volume keys</Text>
+          <View style={styles.labelWrapper}>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Volume keys navigation</Text>
+            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>
+              Use hardware volume buttons to flip pages
+            </Text>
+          </View>
           <Switch
             value={settings.volumeKeyNavigation}
             onValueChange={(volumeKeyNavigation) => updateSettings({ volumeKeyNavigation })}
@@ -173,16 +133,29 @@ export default function ReaderSettingsScreen() {
           />
         </View>
 
-        {/* Section: Actions */}
-        <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 24 }]}>Actions</Text>
+        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+          <View style={styles.labelWrapper}>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Keep screen awake</Text>
+            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Prevent screen timeout while reading</Text>
+          </View>
+          <Switch
+            value={settings.keepScreenOn}
+            onValueChange={(keepScreenOn) => updateSettings({ keepScreenOn })}
+            trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
 
         <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
-            Show actions on long tap
-          </Text>
+          <View style={styles.labelWrapper}>
+            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Incognito Reading Mode</Text>
+            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>
+              Pause saving reading history & timestamps
+            </Text>
+          </View>
           <Switch
-            value={settings.showActionsOnLongTap}
-            onValueChange={(showActionsOnLongTap) => updateSettings({ showActionsOnLongTap })}
+            value={Boolean(settings.incognitoMode)}
+            onValueChange={(incognitoMode) => updateSettings({ incognitoMode })}
             trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
             thumbColor="#FFFFFF"
           />
@@ -227,6 +200,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     borderBottomWidth: 0.5,
+  },
+  labelWrapper: {
+    flex: 1,
+    marginRight: 12,
   },
   settingTitle: {
     fontSize: 15,

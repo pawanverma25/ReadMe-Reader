@@ -37,7 +37,16 @@ export interface Category {
   icon?: string;
 }
 
-export type ThemePreset = 'default' | 'dynamic' | 'catppuccin' | 'green_apple';
+export type ThemePreset =
+  | 'default'
+  | 'dynamic'
+  | 'catppuccin'
+  | 'green_apple'
+  | 'nord'
+  | 'tokyo_night'
+  | 'dracula'
+  | 'solarized'
+  | 'sepia';
 export type ThemeMode = 'system' | 'light' | 'dark';
 
 export type ReadingMode = 'long_strip' | 'single_page_h' | 'single_page_v';

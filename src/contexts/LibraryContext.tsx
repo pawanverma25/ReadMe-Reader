@@ -22,7 +22,12 @@ interface LibraryContextType {
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
   addBook: (book: Omit<Book, 'id' | 'addedAt' | 'lastReadAt' | 'bookmarks' | 'currentPage' | 'readingTimeMinutes' | 'status'>) => Promise<Book>;
-  updateBookProgress: (bookId: string, page: number, totalPages?: number) => Promise<void>;
+  updateBookProgress: (
+    bookId: string,
+    page: number,
+    totalPages?: number,
+    isIncognito?: boolean
+  ) => Promise<void>;
   toggleBookmark: (bookId: string, page: number, title?: string) => Promise<void>;
   updateBookStatus: (bookId: string, status: StatusType) => Promise<void>;
   updateBookCategories: (bookId: string, categoryIds: string[]) => Promise<void>;
