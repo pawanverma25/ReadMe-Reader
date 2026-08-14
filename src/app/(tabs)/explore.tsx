@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -97,7 +97,7 @@ export default function ExploreScreen() {
   const totalBookmarks = books.reduce((acc, b) => acc + (b.bookmarks?.length || 0), 0);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Import PDF Books</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>

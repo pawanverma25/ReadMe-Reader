@@ -31,6 +31,7 @@ interface LibraryContextType {
   toggleBookmark: (bookId: string, page: number, title?: string) => Promise<void>;
   updateBookStatus: (bookId: string, status: StatusType) => Promise<void>;
   updateBookCategories: (bookId: string, categoryIds: string[]) => Promise<void>;
+  toggleFavorite: (bookId: string) => Promise<void>;
   deleteBook: (bookId: string) => Promise<void>;
   createCategory: (name: string, icon?: string) => Promise<Category>;
   editCategory: (id: string, name: string) => Promise<void>;
@@ -152,6 +153,12 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await saveStoredBooks(updated);
   };
 
+  const toggleFavorite = async (bookId: string) => {
+    const updated = books.map((b) => (b.id === bookId ? { ...b, isFavorite: !b.isFavorite } : b));
+    setBooks(updated);
+    await saveStoredBooks(updated);
+  };
+
   const deleteBook = async (bookId: string) => {
     const updated = books.filter((b) => b.id !== bookId);
     setBooks(updated);
@@ -210,6 +217,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         toggleBookmark,
         updateBookStatus,
         updateBookCategories,
+        toggleFavorite,
         deleteBook,
         createCategory,
         editCategory,

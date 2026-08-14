@@ -1,18 +1,17 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { AlertConfig, ThemedAlert } from '../../components/common/ThemedAlert';
 import {
   ArrowLeft,
   BookOpen,
@@ -20,6 +19,7 @@ import {
   CheckCircle,
   Clock,
   FolderKanban,
+  Heart,
   Play,
   Star,
   Trash2,
@@ -30,15 +30,20 @@ export default function BookDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const router = useRouter();
-  const { books, categories, updateBookCategories, deleteBook } = useLibrary();
+  const { books, categories, updateBookCategories, toggleFavorite, deleteBook } = useLibrary();
 
   const book = books.find((b) => b.id === id);
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
+    visible: false,
+    title: '',
+    message: '',
+  });
 
   if (!book) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
         <View style={styles.notFoundContainer}>
           <Text style={[styles.notFoundText, { color: colors.textPrimary }]}>Book Not Found</Text>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -55,17 +60,22 @@ export default function BookDetailsScreen() {
   );
 
   const handleDelete = () => {
-    Alert.alert('Remove Book', `Are you sure you want to remove "${book.title}" from your library?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteBook(book.id);
-          router.replace('/(tabs)');
-        },
+    setAlertConfig({
+      visible: true,
+      title: 'Remove Book',
+      message: `Are you sure you want to remove "${book.title}" from your library? This will delete local metadata and progress.`,
+      type: 'warning',
+      confirmText: 'Remove Book',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+        await deleteBook(book.id);
+        router.replace('/(tabs)');
       },
-    ]);
+      onCancel: () => {
+        setAlertConfig((prev) => ({ ...prev, visible: false }));
+      },
+    });
   };
 
   const handleToggleCategory = async (catId: string) => {
@@ -80,18 +90,32 @@ export default function BookDetailsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+      {/* Top Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-          Book Information
+          Book Details
         </Text>
-        <TouchableOpacity style={styles.headerBtn} onPress={handleDelete}>
-          <Trash2 size={20} color={colors.danger} />
-        </TouchableOpacity>
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => toggleFavorite(book.id)}
+            activeOpacity={0.7}
+          >
+            <Heart
+              size={22}
+              color={book.isFavorite ? colors.primary : colors.textPrimary}
+              fill={book.isFavorite ? colors.primary : 'transparent'}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.headerBtn} onPress={handleDelete} activeOpacity={0.7}>
+            <Trash2 size={20} color={colors.danger} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -110,7 +134,7 @@ export default function BookDetailsScreen() {
             <Text style={[styles.title, { color: colors.textPrimary }]}>{book.title}</Text>
             <Text style={[styles.author, { color: colors.textSecondary }]}>{book.author}</Text>
 
-            {/* Reading Status Tag */}
+            {/* Status & Favorite Tags */}
             <View style={styles.tagRow}>
               <View
                 style={[
@@ -133,18 +157,12 @@ export default function BookDetailsScreen() {
                     : 'UNREAD'}
                 </Text>
               </View>
-            </View>
 
-            {/* Rating Stars */}
-            <View style={styles.starsRow}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  size={18}
-                  color={star <= (book.rating || 0) ? '#FFC107' : colors.surfaceVariant}
-                  fill={star <= (book.rating || 0) ? '#FFC107' : 'transparent'}
-                />
-              ))}
+              {book.isFavorite && (
+                <View style={[styles.statusBadge, { backgroundColor: '#FFC107', marginLeft: 6 }]}>
+                  <Text style={[styles.statusText, { color: '#000000' }]}>FAVORITE</Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -161,7 +179,7 @@ export default function BookDetailsScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Progress Card */}
+        {/* Reading Progress Card */}
         <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Reading Progress</Text>
 
@@ -205,8 +223,12 @@ export default function BookDetailsScreen() {
         <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.cardHeaderRow}>
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Categories</Text>
-            <TouchableOpacity onPress={() => setShowCategoryModal(true)}>
-              <FolderKanban size={18} color={colors.primary} />
+            <TouchableOpacity
+              style={[styles.manageCatBtn, { backgroundColor: colors.primaryContainer }]}
+              onPress={() => setShowCategoryModal(true)}
+            >
+              <FolderKanban size={15} color={colors.primary} style={{ marginRight: 6 }} />
+              <Text style={[styles.manageCatText, { color: colors.primary }]}>Manage</Text>
             </TouchableOpacity>
           </View>
 
@@ -217,9 +239,9 @@ export default function BookDetailsScreen() {
               return (
                 <View
                   key={catId}
-                  style={[styles.catChip, { backgroundColor: colors.primaryContainer }]}
+                  style={[styles.catChip, { backgroundColor: colors.surfaceVariant }]}
                 >
-                  <Text style={[styles.catChipText, { color: colors.primary }]}>
+                  <Text style={[styles.catChipText, { color: colors.textPrimary }]}>
                     {catObj.name}
                   </Text>
                 </View>
@@ -277,11 +299,14 @@ export default function BookDetailsScreen() {
               style={[styles.readActionBtn, { backgroundColor: colors.primary }]}
               onPress={() => setShowCategoryModal(false)}
             >
-              <Text style={[styles.readActionText, { color: colors.onPrimary }]}>Done</Text>
+              <Text style={[styles.readActionText, { color: colors.onPrimary }]}>Save Categories</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* Custom Mihon Alert Dialog */}
+      <ThemedAlert {...alertConfig} />
     </SafeAreaView>
   );
 }
@@ -300,6 +325,10 @@ const styles = StyleSheet.create({
   },
   headerBtn: {
     padding: 8,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 17,
@@ -348,6 +377,7 @@ const styles = StyleSheet.create({
   tagRow: {
     flexDirection: 'row',
     marginTop: 8,
+    alignItems: 'center',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -358,11 +388,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '700',
-  },
-  starsRow: {
-    flexDirection: 'row',
-    marginTop: 8,
-    gap: 4,
   },
   readActionBtn: {
     height: 48,
@@ -386,18 +411,30 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    marginBottom: 10,
   },
   cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 10,
+  },
+  manageCatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  manageCatText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   progressTrack: {
     height: 6,
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 12,
+    marginTop: 8,
   },
   progressFill: {
     height: '100%',
@@ -423,7 +460,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 4,
   },
   catChip: {
     paddingHorizontal: 12,
@@ -437,6 +473,7 @@ const styles = StyleSheet.create({
   descText: {
     fontSize: 13,
     lineHeight: 18,
+    marginTop: 6,
   },
   notFoundContainer: {
     flex: 1,

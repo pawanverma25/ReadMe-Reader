@@ -26,6 +26,7 @@ export interface Book {
   rating?: number;
   bookmarks: Bookmark[];
   readingTimeMinutes: number;
+  isFavorite?: boolean;
   isSample?: boolean;
 }
 

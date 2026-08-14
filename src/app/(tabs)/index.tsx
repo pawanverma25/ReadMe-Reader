@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import {
   FlatList,
   Modal,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { SortOption, useLibrary } from '../../contexts/LibraryContext';
@@ -99,7 +99,7 @@ export default function LibraryScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Top Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         {isSearching ? (
