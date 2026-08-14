@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Book } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Bookmark, Clock, CheckCircle2 } from 'lucide-react-native';
+import { Bookmark, CheckCircle2, Heart, Star } from 'lucide-react-native';
 
 interface BookCardProps {
   book: Book;
@@ -25,6 +25,7 @@ export const BookCard: React.FC<BookCardProps> = ({
   );
 
   const coverBg = book.coverColor || colors.primary;
+  const hasCoverImage = Boolean(book.coverUrl);
 
   if (viewMode === 'list') {
     return (
@@ -35,9 +36,14 @@ export const BookCard: React.FC<BookCardProps> = ({
         activeOpacity={0.7}
       >
         <View style={[styles.listCover, { backgroundColor: coverBg }]}>
-          <Text style={styles.coverInitials}>
-            {book.title.substring(0, 2).toUpperCase()}
-          </Text>
+          {hasCoverImage ? (
+            <Image source={{ uri: book.coverUrl }} style={styles.coverImage} resizeMode="cover" />
+          ) : (
+            <Text style={styles.coverInitials}>
+              {book.title.substring(0, 2).toUpperCase()}
+            </Text>
+          )}
+
           {book.status === 'completed' && (
             <View style={styles.badgeTopRight}>
               <CheckCircle2 size={14} color="#FFFFFF" />
@@ -46,9 +52,13 @@ export const BookCard: React.FC<BookCardProps> = ({
         </View>
 
         <View style={styles.listDetails}>
-          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
-            {book.title}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
+              {book.title}
+            </Text>
+            {book.isFavorite && <Heart size={14} color={colors.primary} fill={colors.primary} style={{ marginLeft: 4 }} />}
+          </View>
+
           <Text style={[styles.author, { color: colors.textSecondary }]} numberOfLines={1}>
             {book.author}
           </Text>
@@ -63,7 +73,7 @@ export const BookCard: React.FC<BookCardProps> = ({
               />
             </View>
             <Text style={[styles.progressText, { color: colors.textSecondary }]}>
-              {book.currentPage} / {book.totalPages} ({progressPercent}%)
+              Page {book.currentPage} of {book.totalPages} ({progressPercent}%)
             </Text>
           </View>
         </View>
@@ -92,9 +102,13 @@ export const BookCard: React.FC<BookCardProps> = ({
       activeOpacity={0.8}
     >
       <View style={[styles.gridCover, isCompact && styles.gridCoverCompact, { backgroundColor: coverBg }]}>
-        <Text style={[styles.gridCoverText, isCompact && { fontSize: 18 }]}>
-          {book.title.substring(0, 2).toUpperCase()}
-        </Text>
+        {hasCoverImage ? (
+          <Image source={{ uri: book.coverUrl }} style={styles.coverImage} resizeMode="cover" />
+        ) : (
+          <Text style={[styles.gridCoverText, isCompact && { fontSize: 18 }]}>
+            {book.title.substring(0, 2).toUpperCase()}
+          </Text>
+        )}
 
         {/* Top Badges */}
         <View style={styles.badgeOverlay}>
@@ -112,11 +126,19 @@ export const BookCard: React.FC<BookCardProps> = ({
             </View>
           )}
 
-          {book.bookmarks.length > 0 && (
-            <View style={[styles.iconTag, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-              <Bookmark size={12} color="#FFFFFF" />
-            </View>
-          )}
+          <View style={styles.topRightIcons}>
+            {book.isFavorite && (
+              <View style={[styles.iconTag, { backgroundColor: 'rgba(0,0,0,0.6)', marginRight: 3 }]}>
+                <Heart size={11} color="#FFC107" fill="#FFC107" />
+              </View>
+            )}
+
+            {book.bookmarks.length > 0 && (
+              <View style={[styles.iconTag, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+                <Bookmark size={11} color="#FFFFFF" />
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Bottom Progress Bar */}
@@ -165,9 +187,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    overflow: 'hidden',
   },
   gridCoverCompact: {
     height: 125,
+  },
+  coverImage: {
+    ...StyleSheet.absoluteFill,
+    width: '100%',
+    height: '100%',
   },
   gridCoverText: {
     color: '#FFFFFF',
@@ -183,6 +211,10 @@ const styles = StyleSheet.create({
     right: 6,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  topRightIcons: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
   statusTag: {
@@ -238,6 +270,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    overflow: 'hidden',
   },
   coverInitials: {
     color: '#FFFFFF',
@@ -246,15 +279,19 @@ const styles = StyleSheet.create({
   },
   badgeTopRight: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: 2,
+    right: 2,
     backgroundColor: '#4CAF50',
-    borderRadius: 10,
-    padding: 2,
+    borderRadius: 8,
+    padding: 1,
   },
   listDetails: {
     flex: 1,
     marginLeft: 12,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
     fontSize: 15,

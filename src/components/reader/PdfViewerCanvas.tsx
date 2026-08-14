@@ -77,6 +77,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       color: #FFFFFF;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       overflow: hidden;
+      transition: background-color 0.2s ease;
     }
     
     #scroll-container {
@@ -84,16 +85,16 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       height: 100%;
       overflow-x: hidden;
       overflow-y: auto;
-      padding-left: 0%;
-      padding-right: 0%;
-      transition: padding 0.2s ease;
+      padding-left: ${settings.sidePadding || 0}%;
+      padding-right: ${settings.sidePadding || 0}%;
+      transition: padding 0.2s ease, background-color 0.2s ease;
     }
 
-    /* Continuous Long Strip webtoon strip layout (height: auto, NO 100vh gaps!) */
+    /* Continuous Long Strip webtoon strip layout */
     .long-strip {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: ${settings.cropBorders ? '0px' : '8px'};
       padding: 10px 0;
       width: 100%;
       align-items: center;
@@ -363,7 +364,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       }
     }, { passive: true });
 
-    // Hardware Volume Keys Navigation
+    // Hardware Volume Keys & Keyboard Navigation
     window.addEventListener('keydown', (e) => {
       if (!volumeKeyNav) return;
       if (e.key === 'VolumeUp' || e.keyCode === 24 || e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
@@ -416,7 +417,9 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
       if (s.readerTheme) {
         const bgMap = { oled: '#000000', dark: '#16131B', sepia: '#F4ECD8', light: '#FFFFFF' };
-        body.style.backgroundColor = bgMap[s.readerTheme] || '#000000';
+        const bgColor = bgMap[s.readerTheme] || '#000000';
+        body.style.backgroundColor = bgColor;
+        if (container) container.style.backgroundColor = bgColor;
       }
 
       if (s.sidePadding !== undefined && container) {
@@ -455,6 +458,10 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
           if (data.settings.volumeKeyNavigation !== undefined) {
             volumeKeyNav = data.settings.volumeKeyNavigation;
           }
+        } else if (data.action === 'NEXT_PAGE') {
+          nextPage();
+        } else if (data.action === 'PREV_PAGE') {
+          prevPage();
         }
       } catch (e) {}
     });
