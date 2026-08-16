@@ -42,15 +42,16 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     `;
   }, [book.id, pdfBase64]);
 
-  // Send dynamic settings updates over postMessage WITHOUT reloading the WebView
+  // Inject dynamic settings updates directly into V8 engine WITHOUT reloading the WebView
   useEffect(() => {
-    if (webViewRef.current && pdfLoadedRef.current) {
-      webViewRef.current.postMessage(
-        JSON.stringify({
-          action: 'UPDATE_SETTINGS',
-          settings,
-        })
-      );
+    if (webViewRef.current) {
+      console.log('[PdfViewerCanvas] Injecting dynamic settings into V8 engine:', settings);
+      webViewRef.current.injectJavaScript(`
+        if (typeof window.applyDynamicSettings === 'function') {
+          window.applyDynamicSettings(${JSON.stringify(settings)});
+        }
+        true;
+      `);
     }
   }, [
     settings.readerTheme,
@@ -493,6 +494,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
     // Dynamic CSS Custom Variable updater without page reload
     function applyDynamicSettings(s) {
+      console.log('[WebView HTML] applyDynamicSettings called with:', JSON.stringify(s));
       const root = document.documentElement;
 
       if (s.readerTheme) {
@@ -516,6 +518,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         renderView();
       }
     }
+    window.applyDynamicSettings = applyDynamicSettings;
 
     // Safe Message listener from React Native
     window.addEventListener('message', (event) => {
