@@ -270,9 +270,21 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
       </Modal>
 
       {/* In-Reader Bottom Settings Sheet */}
-      <Modal visible={showReaderSettingsSheet} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.readerSettingsSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Modal visible={showReaderSettingsSheet} transparent animationType="slide" onRequestClose={() => setShowReaderSettingsSheet(false)}>
+        <TouchableOpacity
+          style={styles.sheetBackdropOverlay}
+          activeOpacity={1}
+          onPress={() => setShowReaderSettingsSheet(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={[styles.readerSettingsSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {/* Sheet Header */}
+            <View style={styles.sheetHeaderTitleRow}>
+              <Text style={[styles.sheetHeaderTitle, { color: colors.textPrimary }]}>Reader Settings</Text>
+              <TouchableOpacity onPress={() => setShowReaderSettingsSheet(false)} style={{ padding: 4 }}>
+                <X size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
             {/* Sheet Tabs Header */}
             <View style={[styles.sheetTabsHeader, { borderBottomColor: colors.border }]}>
               <TouchableOpacity
@@ -322,7 +334,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
             </View>
 
             {/* Sheet Tab Contents */}
-            <ScrollView style={{ maxHeight: 380, paddingVertical: 12 }}>
+            <ScrollView style={{ maxHeight: 340, paddingVertical: 8 }}>
               {activeSheetTab === 'reading_mode' && (
                 <View>
                   <Text style={[styles.sheetSectionTitle, { color: colors.primary }]}>Reading mode</Text>
@@ -446,10 +458,10 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
               style={[styles.closeSheetBtn, { backgroundColor: colors.primary }]}
               onPress={() => setShowReaderSettingsSheet(false)}
             >
-              <Text style={{ color: colors.onPrimary, fontWeight: '700', fontSize: 14 }}>Apply & Close</Text>
+              <Text style={{ color: colors.onPrimary, fontWeight: '700', fontSize: 14 }}>Done</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -627,13 +639,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 3,
   },
-  // In-Reader Settings Sheet
+  sheetBackdropOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
   readerSettingsSheet: {
     width: '100%',
     maxWidth: 460,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
+  },
+  sheetHeaderTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sheetHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
   },
   sheetTabsHeader: {
     flexDirection: 'row',
