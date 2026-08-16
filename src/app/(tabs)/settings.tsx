@@ -64,12 +64,14 @@ export default function SettingsScreen() {
       title: 'Security and privacy',
       subtitle: 'App lock, secure screen',
       icon: Shield,
+      route: '/settings/security',
     },
     {
       id: 'advanced',
       title: 'Advanced',
       subtitle: 'Dump crash logs, battery optimizations',
       icon: Terminal,
+      route: '/settings/advanced',
     },
     {
       id: 'about',

@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { LibraryProvider } from '../contexts/LibraryContext';
 import { ReaderProvider } from '../contexts/ReaderContext';
+import { SecurityProvider } from '../contexts/SecurityContext';
 
 function RootLayoutNav() {
   const { colors, isDark } = useTheme();
@@ -25,6 +26,9 @@ function RootLayoutNav() {
         <Stack.Screen name="settings/appearance" />
         <Stack.Screen name="settings/data-storage" />
         <Stack.Screen name="settings/reader-settings" />
+        <Stack.Screen name="settings/statistics" />
+        <Stack.Screen name="settings/security" />
+        <Stack.Screen name="settings/advanced" />
       </Stack>
     </>
   );
@@ -35,7 +39,9 @@ export default function RootLayout() {
     <ThemeProvider>
       <LibraryProvider>
         <ReaderProvider>
-          <RootLayoutNav />
+          <SecurityProvider>
+            <RootLayoutNav />
+          </SecurityProvider>
         </ReaderProvider>
       </LibraryProvider>
     </ThemeProvider>

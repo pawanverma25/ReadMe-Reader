@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -16,14 +15,13 @@ import {
   exportBackupToFile,
   importBackupFromFile,
 } from '../../utils/storage';
-import { ArrowLeft, HelpCircle, Info } from 'lucide-react-native';
+import { ArrowLeft, Database, Download, HardDrive, Info, Upload } from 'lucide-react-native';
 
 export default function DataStorageScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { reloadAllData } = useLibrary();
+  const { books, reloadAllData } = useLibrary();
 
-  const [clearOnLaunch, setClearOnLaunch] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [alertConfig, setAlertConfig] = useState<AlertConfig>({
     visible: false,
@@ -39,14 +37,18 @@ export default function DataStorageScreen() {
     setAlertConfig((prev) => ({ ...prev, visible: false }));
   };
 
+  // Calculate actual storage occupied by imported books
+  const totalSizeBytes = books.reduce((acc, b) => acc + (b.fileSize || 0), 0);
+  const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(2);
+
   const handleExportBackup = async () => {
     try {
       setIsProcessing(true);
       const res = await exportBackupToFile();
       if (res.success) {
         showAlert({
-          title: 'Backup Created',
-          message: 'Your ReadMe backup file (.json) was generated and exported successfully!',
+          title: 'Backup Exported',
+          message: 'Your ReadMe library backup file (.json) was generated and exported successfully!',
           type: 'success',
           confirmText: 'OK',
           onConfirm: hideAlert,
@@ -54,7 +56,7 @@ export default function DataStorageScreen() {
       } else {
         showAlert({
           title: 'Export Failed',
-          message: res.error || 'Failed to export backup.',
+          message: res.error || 'Failed to export backup payload.',
           type: 'error',
           confirmText: 'OK',
           onConfirm: hideAlert,
@@ -81,9 +83,9 @@ export default function DataStorageScreen() {
         await reloadAllData();
         showAlert({
           title: 'Backup Restored!',
-          message: `Successfully restored ${res.data.books.length} books and ${res.data.categories.length} library categories onto this device!`,
+          message: `Successfully restored ${res.data.books.length} books and ${res.data.categories.length} categories onto this device!`,
           type: 'success',
-          confirmText: 'Awesome',
+          confirmText: 'Great',
           onConfirm: hideAlert,
         });
       } else if (res.error && res.error !== 'Import cancelled') {
@@ -115,117 +117,74 @@ export default function DataStorageScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Data and storage</Text>
-        <HelpCircle size={22} color={colors.textSecondary} style={{ marginLeft: 'auto', marginRight: 8 }} />
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Data & Storage</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Storage Location */}
-        <View style={styles.sectionMargin}>
-          <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Storage location</Text>
-          <Text style={[styles.settingSub, { color: colors.textSecondary }]}>
-            /storage/emulated/0/ReadMe
-          </Text>
-        </View>
+        {/* Real Library Storage Usage Card */}
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.cardHeaderRow}>
+            <HardDrive size={22} color={colors.primary} />
+            <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Local Library Storage</Text>
+          </View>
 
-        <View style={[styles.infoBanner, { backgroundColor: colors.surfaceVariant }]}>
-          <Info size={18} color={colors.primary} style={{ marginTop: 2 }} />
-          <Text style={[styles.infoBannerText, { color: colors.textSecondary }]}>
-            Used for automatic backups, PDF downloads, and local source libraries.
-          </Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={[styles.statNum, { color: colors.textPrimary }]}>{books.length}</Text>
+              <Text style={[styles.statSub, { color: colors.textSecondary }]}>Imported PDFs</Text>
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+            <View style={styles.statBox}>
+              <Text style={[styles.statNum, { color: colors.textPrimary }]}>{totalSizeMB} MB</Text>
+              <Text style={[styles.statSub, { color: colors.textSecondary }]}>Calculated disk size</Text>
+            </View>
+          </View>
         </View>
 
         {/* Section: Backup and Restore */}
-        <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 24 }]}>
-          Backup and restore
+        <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 12 }]}>
+          Backup & Data Transfer
         </Text>
 
-        {/* Create Backup / Restore Backup Pill Button Pair */}
-        <View style={[styles.backupPillContainer, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.descText, { color: colors.textSecondary }]}>
+            Export your entire library metadata, bookmarks, categories, and reading history to a single backup file, or restore data onto a new device.
+          </Text>
+
+          {/* Export JSON Backup Button */}
           <TouchableOpacity
-            style={[styles.backupPillBtn, { borderRightColor: colors.border }]}
+            style={[styles.actionBtn, { backgroundColor: colors.primary }]}
             onPress={handleExportBackup}
             disabled={isProcessing}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.backupPillText, { color: colors.textPrimary }]}>Create backup</Text>
+            <Download size={18} color={colors.onPrimary} />
+            <Text style={[styles.actionBtnText, { color: colors.onPrimary }]}>Export Library Backup (.json)</Text>
           </TouchableOpacity>
 
+          {/* Import JSON Backup Button */}
           <TouchableOpacity
-            style={styles.backupPillBtn}
+            style={[styles.actionBtnSecondary, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}
             onPress={handleImportBackup}
             disabled={isProcessing}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.backupPillText, { color: colors.textPrimary }]}>Restore backup</Text>
+            <Upload size={18} color={colors.primary} />
+            <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Import Library Backup (.json)</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Frequency */}
-        <TouchableOpacity style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <View style={styles.settingLabelContainer}>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
-              Automatic backup frequency
-            </Text>
-            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Every 12 hours</Text>
-          </View>
-        </TouchableOpacity>
-
-        <View style={[styles.infoBanner, { backgroundColor: colors.surfaceVariant, marginTop: 12 }]}>
+        {/* Informational Banner */}
+        <View style={[styles.infoBanner, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}>
           <Info size={18} color={colors.primary} style={{ marginTop: 2 }} />
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={[styles.infoBannerText, { color: colors.textSecondary }]}>
-              You should keep copies of backups in other places as well. Backups contain sensitive data including any stored preferences; be careful if sharing.
-            </Text>
-            <Text style={[styles.lastBackupText, { color: colors.primary }]}>
-              Last automatically backed up: 59 minutes ago
-            </Text>
-          </View>
-        </View>
-
-        {/* Section: Storage Usage */}
-        <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 28 }]}>
-          Storage usage
-        </Text>
-
-        <View style={styles.storageUsageContainer}>
-          <Text style={[styles.storagePath, { color: colors.textPrimary }]}>
-            /storage/emulated/0
+          <Text style={[styles.infoBannerText, { color: colors.textSecondary }]}>
+            ReadMe backups store your reading positions, bookmarks, custom categories, and library metadata securely on your device.
           </Text>
-
-          {/* Mihon Storage Bar */}
-          <View style={[styles.storageTrack, { backgroundColor: colors.surfaceVariant }]}>
-            <View style={[styles.storageFill, { backgroundColor: colors.primary, width: '78%' }]} />
-          </View>
-
-          <Text style={[styles.storageStats, { color: colors.textSecondary }]}>
-            Available: 24.21 GB / Total: 117 GB
-          </Text>
-        </View>
-
-        <TouchableOpacity style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <View style={styles.settingLabelContainer}>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Clear chapter cache</Text>
-            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Used: 57.34 MB</Text>
-          </View>
-        </TouchableOpacity>
-
-        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <View style={styles.settingLabelContainer}>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
-              Clear chapter cache on app launch
-            </Text>
-          </View>
-          <Switch
-            value={clearOnLaunch}
-            onValueChange={setClearOnLaunch}
-            trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-            thumbColor="#FFFFFF"
-          />
         </View>
       </ScrollView>
 
-      {/* Custom Mihon Alert Dialog */}
       <ThemedAlert {...alertConfig} />
     </SafeAreaView>
   );
@@ -251,89 +210,89 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   scrollContent: {
-    padding: 18,
+    padding: 16,
     paddingBottom: 40,
   },
-  sectionMargin: {
-    marginBottom: 8,
+  card: {
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 6,
+  },
+  statBox: {
+    alignItems: 'center',
+  },
+  statNum: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  statSub: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  divider: {
+    width: 1,
+    height: 40,
   },
   sectionLabel: {
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: 10,
     letterSpacing: 0.5,
   },
-  settingRow: {
+  descText: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 18,
+  },
+  actionBtn: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 0.5,
-  },
-  settingLabelContainer: {
-    flex: 1,
-    marginRight: 12,
-  },
-  settingTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  settingSub: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 12,
-    marginVertical: 6,
-  },
-  infoBannerText: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  lastBackupText: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 6,
-  },
-  backupPillContainer: {
-    flexDirection: 'row',
-    borderRadius: 24,
-    borderWidth: 1,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  backupPillBtn: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRightWidth: 0.5,
+    borderRadius: 14,
+    gap: 10,
+    marginBottom: 12,
   },
-  backupPillText: {
+  actionBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 10,
+  },
+  actionBtnText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  storageUsageContainer: {
-    marginVertical: 10,
+  infoBanner: {
+    flexDirection: 'row',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 10,
   },
-  storagePath: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  storageTrack: {
-    height: 12,
-    borderRadius: 6,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  storageFill: {
-    height: '100%',
-    borderRadius: 6,
-  },
-  storageStats: {
+  infoBannerText: {
     fontSize: 12,
+    lineHeight: 17,
+    flex: 1,
   },
 });
