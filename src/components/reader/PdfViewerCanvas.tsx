@@ -21,10 +21,26 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   onToggleOverlay,
 }) => {
   const webViewRef = useRef<WebView>(null);
+  const pdfLoadedRef = useRef<boolean>(false);
+
+  // Send PDF Base64 data to WebView when ready
+  useEffect(() => {
+    if (pdfBase64 && webViewRef.current && !pdfLoadedRef.current) {
+      webViewRef.current.postMessage(
+        JSON.stringify({
+          action: 'LOAD_PDF_BASE64',
+          pdfBase64,
+          currentPage,
+          settings,
+        })
+      );
+      pdfLoadedRef.current = true;
+    }
+  }, [pdfBase64]);
 
   // Send dynamic settings updates over postMessage WITHOUT reloading the WebView
   useEffect(() => {
-    if (webViewRef.current) {
+    if (webViewRef.current && pdfLoadedRef.current) {
       webViewRef.current.postMessage(
         JSON.stringify({
           action: 'UPDATE_SETTINGS',
@@ -44,7 +60,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
   // Send page jump over postMessage WITHOUT reloading the WebView
   useEffect(() => {
-    if (webViewRef.current) {
+    if (webViewRef.current && pdfLoadedRef.current) {
       webViewRef.current.postMessage(
         JSON.stringify({
           action: 'JUMP_TO_PAGE',
@@ -53,22 +69,6 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       );
     }
   }, [currentPage]);
-
-  // Get initial background color based on theme
-  const initialBgColor = () => {
-    switch (settings.readerTheme) {
-      case 'oled':
-        return '#000000';
-      case 'dark':
-        return '#16131B';
-      case 'sepia':
-        return '#F4ECD8';
-      case 'light':
-        return '#FFFFFF';
-      default:
-        return '#000000';
-    }
-  };
 
   // Construct static base HTML string ONCE so WebView source prop NEVER changes
   const htmlContent = useMemo(() => {
@@ -80,8 +80,8 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     :root {
-      --bg-color: ${initialBgColor()};
-      --side-padding: ${settings.sidePadding || 0}%;
+      --bg-color: #000000;
+      --side-padding: 0%;
       --canvas-filter: none;
     }
 
@@ -107,24 +107,26 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       height: 100%;
       overflow-x: hidden;
       overflow-y: auto;
-      padding-left: var(--side-padding);
-      padding-right: var(--side-padding);
       background-color: var(--bg-color);
-      transition: padding 0.2s ease, background-color 0.2s ease;
+      box-sizing: border-box;
+      transition: background-color 0.2s ease;
     }
 
     /* Continuous Long Strip webtoon strip layout */
     .long-strip {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding: 12px 0;
+      gap: 10px;
+      padding-top: 12px;
+      padding-bottom: 12px;
+      padding-left: var(--side-padding);
+      padding-right: var(--side-padding);
       width: 100%;
+      box-sizing: border-box;
       align-items: center;
     }
 
     .long-strip .page-wrapper {
-      min-width: unset;
       width: 100%;
       height: auto;
       min-height: unset;
@@ -132,6 +134,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       display: flex;
       justify-content: center;
       align-items: center;
+      box-sizing: border-box;
     }
 
     /* Single Page Slider & Touch Swipe Animation */
@@ -143,6 +146,9 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       display: flex;
       justify-content: center;
       align-items: center;
+      padding-left: var(--side-padding);
+      padding-right: var(--side-padding);
+      box-sizing: border-box;
     }
 
     .single-page-slider {
@@ -155,15 +161,19 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     }
 
     .single-page-viewport .page-wrapper {
-      min-width: 100vw;
+      min-width: 100%;
+      width: 100%;
       height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
       padding: 6px;
+      box-sizing: border-box;
     }
 
     canvas {
+      display: block;
+      margin: 0 auto;
       max-width: 100%;
       max-height: 98vh;
       height: auto;
@@ -189,7 +199,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 <body>
   <div id="scroll-container">
     <div id="app">
-      <div class="loading-text" id="loader">Rendering PDF Document...</div>
+      <div class="loading-text" id="loader">Preparing PDF Document...</div>
     </div>
   </div>
 
@@ -200,10 +210,9 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
     let pdfDoc = null;
     let totalPages = 1;
-    let currentPage = ${currentPage || 1};
-    let readingMode = "${settings.readingMode}";
-    let volumeKeyNav = ${Boolean(settings.volumeKeyNavigation)};
-    let pdfBase64Data = "${pdfBase64 || ''}";
+    let currentPage = 1;
+    let readingMode = "long_strip";
+    let volumeKeyNav = false;
     let isInitialJumpDone = false;
 
     let touchStartX = 0;
@@ -218,11 +227,14 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       return uint8Array;
     }
 
-    async function loadPDFDocument() {
+    async function initPDFFromBase64(base64Data, initialPage, initialSettings) {
       const loader = document.getElementById('loader');
       try {
-        if (pdfBase64Data && pdfBase64Data.length > 100) {
-          const buffer = base64ToUint8Array(pdfBase64Data);
+        if (initialPage) currentPage = initialPage;
+        if (initialSettings) applyDynamicSettings(initialSettings);
+
+        if (base64Data && base64Data.length > 100) {
+          const buffer = base64ToUint8Array(base64Data);
           const loadingTask = pdfjsLib.getDocument({ data: buffer });
           pdfDoc = await loadingTask.promise;
           totalPages = pdfDoc.numPages;
@@ -311,7 +323,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       const slider = document.getElementById('page-slider');
       if (slider) {
         const offset = (currentPage - 1) * -100;
-        slider.style.transform = 'translateX(' + offset + 'vw)';
+        slider.style.transform = 'translateX(' + offset + '%)';
       }
     }
 
@@ -445,7 +457,10 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       try {
         if (!event.data || typeof event.data !== 'string') return;
         const data = JSON.parse(event.data);
-        if (data.action === 'JUMP_TO_PAGE') {
+
+        if (data.action === 'LOAD_PDF_BASE64') {
+          initPDFFromBase64(data.pdfBase64, data.currentPage, data.settings);
+        } else if (data.action === 'JUMP_TO_PAGE') {
           if (currentPage !== data.page) {
             currentPage = data.page;
             if (readingMode === 'long_strip') {
@@ -467,13 +482,11 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         }
       } catch (e) {}
     });
-
-    loadPDFDocument();
   </script>
 </body>
 </html>
     `;
-  }, [book.id, pdfBase64]);
+  }, [book.id]);
 
   const handleMessage = (event: any) => {
     try {
@@ -489,6 +502,20 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     }
   };
 
+  const handleWebViewLoad = () => {
+    if (pdfBase64 && webViewRef.current) {
+      webViewRef.current.postMessage(
+        JSON.stringify({
+          action: 'LOAD_PDF_BASE64',
+          pdfBase64,
+          currentPage,
+          settings,
+        })
+      );
+      pdfLoadedRef.current = true;
+    }
+  };
+
   return (
     <View style={styles.container}>
       <WebView
@@ -496,6 +523,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         originWhitelist={['*']}
         source={{ html: htmlContent }}
         onMessage={handleMessage}
+        onLoadEnd={handleWebViewLoad}
         style={styles.webview}
         scrollEnabled={true}
         bounces={false}
