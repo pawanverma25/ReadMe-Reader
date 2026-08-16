@@ -103,5 +103,10 @@ npm run eas-build:aab
 
 ---
 
+## 🛡️ Privacy Policy
+ReadMe is 100% offline and privacy-first. We do not collect or track any user data. Read the full [Privacy Policy](file:///C:/Users/pawan/Documents/antigravity/intelligent-darwin/PRIVACY_POLICY.md).
+
+---
+
 ## 📄 License
 Distributed under the MIT License. See `LICENSE` for more information.
