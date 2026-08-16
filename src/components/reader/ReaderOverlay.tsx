@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Book, ReaderSettings, ReaderTheme, ReadingMode } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
@@ -48,6 +49,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
   onUpdateSettings,
 }) => {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [showJumpModal, setShowJumpModal] = useState(false);
   const [jumpPageInput, setJumpPageInput] = useState('');
   const [showBookmarksDrawer, setShowBookmarksDrawer] = useState(false);
@@ -68,10 +70,22 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
     }
   };
 
+  const topPadding = insets.top > 0 ? insets.top : 12;
+  const bottomPadding = insets.bottom > 0 ? insets.bottom : 14;
+
   return (
     <View style={styles.overlayContainer} pointerEvents="box-none">
-      {/* Top Header Bar */}
-      <View style={[styles.topBar, { backgroundColor: colors.surface }]}>
+      {/* Top Header Bar with Safe Area Top Inset */}
+      <View
+        style={[
+          styles.topBar,
+          {
+            backgroundColor: colors.surface,
+            paddingTop: topPadding,
+            height: 56 + topPadding,
+          },
+        ]}
+      >
         <TouchableOpacity style={styles.iconBtn} onPress={onBack} activeOpacity={0.7}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
@@ -112,8 +126,16 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
         </View>
       </View>
 
-      {/* Clean Bottom Control HUD Bar (Without Ambiguous Duplicate Pills) */}
-      <View style={[styles.bottomBar, { backgroundColor: colors.surface }]}>
+      {/* Clean Bottom Control HUD Bar with Safe Area Bottom Inset */}
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            backgroundColor: colors.surface,
+            paddingBottom: bottomPadding,
+          },
+        ]}
+      >
         <View style={styles.pageStatusRow}>
           <TouchableOpacity
             style={styles.pageNavBtn}
@@ -190,7 +212,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
         </View>
       </Modal>
 
-      {/* Mihon Side Drawer Bookmarks Panel */}
+      {/* Side Drawer Bookmarks Panel */}
       <Modal visible={showBookmarksDrawer} transparent animationType="slide">
         <View style={styles.drawerOverlay}>
           <View style={[styles.bookmarksDrawer, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -247,7 +269,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
         </View>
       </Modal>
 
-      {/* Mihon In-Reader Bottom Settings Sheet */}
+      {/* In-Reader Bottom Settings Sheet */}
       <Modal visible={showReaderSettingsSheet} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.readerSettingsSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -440,7 +462,6 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   topBar: {
-    height: 64,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -473,7 +494,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingVertical: 14,
+    paddingTop: 14,
     paddingHorizontal: 16,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,

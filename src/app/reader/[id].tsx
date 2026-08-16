@@ -20,7 +20,7 @@ export default function ReaderScreen() {
   const book = books.find((b) => b.id === id);
   const [currentPage, setCurrentPage] = useState<number>(book?.currentPage || 1);
   const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
-  const [pdfFileUri, setPdfFileUri] = useState<string | null>(null);
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -29,7 +29,7 @@ export default function ReaderScreen() {
     useKeepAwake();
   }
 
-  // Manage Fullscreen Edge-to-Edge Status Bar hiding
+  // Manage Status Bar hiding
   useEffect(() => {
     setStatusBarHidden(!overlayVisible, 'slide');
     return () => {
@@ -37,10 +37,10 @@ export default function ReaderScreen() {
     };
   }, [overlayVisible]);
 
-  // Zero-RAM Streaming: Copy content:// or file:// URI to cache directory for direct PDF.js disk streaming
+  // Read local PDF document into Base64 buffer for 100% reliable WebView canvas rendering
   useEffect(() => {
     let isMounted = true;
-    async function preparePdfFile() {
+    async function loadPdfBase64() {
       if (!book || !book.uri) {
         if (isMounted) setLoading(false);
         return;
@@ -50,26 +50,25 @@ export default function ReaderScreen() {
         setLoading(true);
         setLoadError(null);
 
-        if (book.uri.startsWith('content://')) {
-          const destUri = `${FileSystem.cacheDirectory}reader_${book.id}.pdf`;
-          await FileSystem.copyAsync({
-            from: book.uri,
-            to: destUri,
-          });
-          if (isMounted) setPdfFileUri(destUri);
-        } else {
-          if (isMounted) setPdfFileUri(book.uri);
+        // Read PDF file as Base64 string directly from file system
+        const base64Data = await FileSystem.readAsStringAsync(book.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        if (isMounted) {
+          setPdfBase64(base64Data);
         }
       } catch (err: any) {
-        console.error('Error preparing PDF file stream:', err);
-        // Fallback to original URI
-        if (isMounted) setPdfFileUri(book.uri);
+        console.error('Error reading PDF file into Base64:', err);
+        if (isMounted) {
+          setLoadError('Unable to load PDF file. Please verify the file path.');
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    preparePdfFile();
+    loadPdfBase64();
     return () => {
       isMounted = false;
     };
@@ -87,8 +86,10 @@ export default function ReaderScreen() {
 
   const handlePageSelect = (page: number) => {
     setCurrentPage(page);
-    updateBookProgress(book.id, page, book.totalPages, settings.incognitoMode);
+    updateBookProgress(book.id, page, book.totalPages || totalPages, settings.incognitoMode);
   };
+
+  const totalPages = book.totalPages && book.totalPages > 1 ? book.totalPages : 1;
 
   return (
     <View style={[styles.container, { backgroundColor: '#000000' }]}>
@@ -96,7 +97,7 @@ export default function ReaderScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textPrimary }]}>
-            Preparing PDF Document...
+            Loading PDF Document...
           </Text>
         </View>
       ) : loadError ? (
@@ -106,7 +107,7 @@ export default function ReaderScreen() {
       ) : (
         <PdfViewerCanvas
           book={book}
-          pdfFileUri={pdfFileUri}
+          pdfBase64={pdfBase64}
           settings={settings}
           currentPage={currentPage}
           onPageChange={handlePageChange}
@@ -114,12 +115,12 @@ export default function ReaderScreen() {
         />
       )}
 
-      {/* Top Header & Bottom Control Overlay HUD */}
+      {/* Top Header & Bottom Control Overlay HUD with Inset Safe Areas */}
       <ReaderOverlay
         book={book}
         settings={settings}
         currentPage={currentPage}
-        totalPages={book.totalPages || 40}
+        totalPages={totalPages}
         visible={overlayVisible}
         onBack={() => router.back()}
         onPageSelect={handlePageSelect}

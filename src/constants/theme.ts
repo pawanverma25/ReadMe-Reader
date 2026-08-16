@@ -22,7 +22,7 @@ export interface ColorScheme {
   };
 }
 
-export const MihonThemes: Record<ThemePreset, { dark: ColorScheme; light: ColorScheme }> = {
+export const AppThemes: Record<ThemePreset, { dark: ColorScheme; light: ColorScheme }> = {
   default: {
     dark: {
       primary: '#EC407A',

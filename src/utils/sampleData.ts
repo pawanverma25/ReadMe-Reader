@@ -5,7 +5,7 @@ export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-reading', name: 'Currently Reading', order: 1, isDefault: true, icon: 'clock' },
   { id: 'cat-favorites', name: 'Favorites', order: 2, isDefault: false, icon: 'heart' },
   { id: 'cat-tech', name: 'Tech & Code', order: 3, isDefault: false, icon: 'code' },
-  { id: 'cat-comics', name: 'Manga & Comics', order: 4, isDefault: false, icon: 'sparkles' },
+  { id: 'cat-comics', name: 'Comics & Novels', order: 4, isDefault: false, icon: 'sparkles' },
   { id: 'cat-completed', name: 'Completed', order: 5, isDefault: false, icon: 'check-circle' },
 ];
 

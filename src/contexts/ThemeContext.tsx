@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
-import { ColorScheme, MihonThemes } from '../constants/theme';
+import { AppThemes, ColorScheme } from '../constants/theme';
 import { ThemeMode, ThemePreset } from '../types';
 import { getStoredThemePreferences, saveStoredThemePreferences } from '../utils/storage';
 
@@ -36,7 +36,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isDark =
     themeMode === 'dark' || (themeMode === 'system' && systemScheme === 'dark');
 
-  const presetConfig = MihonThemes[themePreset] || MihonThemes.default;
+  const presetConfig = AppThemes[themePreset] || AppThemes.default;
   const rawColors = isDark ? presetConfig.dark : presetConfig.light;
 
   const colors: ColorScheme = {

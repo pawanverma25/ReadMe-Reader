@@ -19,14 +19,13 @@ export const getStoredBooks = async (): Promise<Book[]> => {
   try {
     const jsonStr = await AsyncStorage.getItem(KEYS.BOOKS);
     if (!jsonStr) {
-      // First launch: initialize with sample books
-      await saveStoredBooks(SAMPLE_BOOKS);
-      return SAMPLE_BOOKS;
+      await saveStoredBooks([]);
+      return [];
     }
     return JSON.parse(jsonStr);
   } catch (error) {
     console.error('Failed to get books:', error);
-    return SAMPLE_BOOKS;
+    return [];
   }
 };
 

@@ -5,7 +5,7 @@ import { Book, ReaderSettings } from '../../types';
 
 interface PdfViewerCanvasProps {
   book: Book;
-  pdfFileUri: string | null;
+  pdfBase64: string | null;
   settings: ReaderSettings;
   currentPage: number;
   onPageChange: (page: number, totalPages: number) => void;
@@ -14,7 +14,7 @@ interface PdfViewerCanvasProps {
 
 export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   book,
-  pdfFileUri,
+  pdfBase64,
   settings,
   currentPage,
   onPageChange,
@@ -117,8 +117,8 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     .long-strip {
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      padding: 10px 0;
+      gap: 8px;
+      padding: 12px 0;
       width: 100%;
       align-items: center;
     }
@@ -189,7 +189,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 <body>
   <div id="scroll-container">
     <div id="app">
-      <div class="loading-text" id="loader">Loading PDF Document...</div>
+      <div class="loading-text" id="loader">Rendering PDF Document...</div>
     </div>
   </div>
 
@@ -199,21 +199,31 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     }
 
     let pdfDoc = null;
-    let totalPages = ${book.totalPages || 40};
+    let totalPages = 1;
     let currentPage = ${currentPage || 1};
     let readingMode = "${settings.readingMode}";
     let volumeKeyNav = ${Boolean(settings.volumeKeyNavigation)};
-    let pdfFileUri = "${pdfFileUri || ''}";
+    let pdfBase64Data = "${pdfBase64 || ''}";
     let isInitialJumpDone = false;
 
     let touchStartX = 0;
     let touchStartY = 0;
 
+    function base64ToUint8Array(base64) {
+      const raw = atob(base64);
+      const uint8Array = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) {
+        uint8Array[i] = raw.charCodeAt(i);
+      }
+      return uint8Array;
+    }
+
     async function loadPDFDocument() {
       const loader = document.getElementById('loader');
       try {
-        if (pdfFileUri && pdfFileUri.length > 5) {
-          const loadingTask = pdfjsLib.getDocument({ url: pdfFileUri, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true });
+        if (pdfBase64Data && pdfBase64Data.length > 100) {
+          const buffer = base64ToUint8Array(pdfBase64Data);
+          const loadingTask = pdfjsLib.getDocument({ data: buffer });
           pdfDoc = await loadingTask.promise;
           totalPages = pdfDoc.numPages;
         }
@@ -222,9 +232,8 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         renderView();
         notifyPageChange();
       } catch (err) {
-        console.error('PDF stream error:', err);
-        if (loader) loader.innerText = 'Rendering fallback canvas...';
-        renderFallbackCanvas();
+        console.error('PDF parsing error:', err);
+        if (loader) loader.innerText = 'Unable to render PDF document.';
       }
     }
 
@@ -284,10 +293,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     }
 
     async function renderPageCanvas(pageNum, canvas) {
-      if (!pdfDoc) {
-        renderMockPage(pageNum, canvas);
-        return;
-      }
+      if (!pdfDoc) return;
       try {
         const page = await pdfDoc.getPage(pageNum);
         const viewport = page.getViewport({ scale: 1.5 });
@@ -297,24 +303,8 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
         await page.render({ canvasContext: context, viewport: viewport }).promise;
       } catch (e) {
-        renderMockPage(pageNum, canvas);
+        console.error('Error rendering page ' + pageNum, e);
       }
-    }
-
-    function renderMockPage(num, canvas) {
-      canvas.width = 600;
-      canvas.height = 800;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#1A1822';
-      ctx.fillRect(0, 0, 600, 800);
-      
-      ctx.fillStyle = '#EC407A';
-      ctx.font = 'bold 26px sans-serif';
-      ctx.fillText("${book.title.replace(/"/g, '\\"')}", 40, 70);
-
-      ctx.fillStyle = '#EEEEEE';
-      ctx.font = '20px sans-serif';
-      ctx.fillText("Page " + num + " of " + totalPages, 40, 120);
     }
 
     function updateSliderPosition() {
@@ -483,7 +473,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 </body>
 </html>
     `;
-  }, [book.id, pdfFileUri]);
+  }, [book.id, pdfBase64]);
 
   const handleMessage = (event: any) => {
     try {

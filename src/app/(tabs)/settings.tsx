@@ -74,7 +74,7 @@ export default function SettingsScreen() {
     {
       id: 'about',
       title: 'About',
-      subtitle: 'ReadMe Stable 1.0.0 (Mihon Edition)',
+      subtitle: 'ReadMe Version 1.0.0',
       icon: Info,
     },
   ];
