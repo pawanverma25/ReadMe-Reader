@@ -14,7 +14,7 @@ export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
-  const { books, updateBookProgress, toggleBookmark } = useLibrary();
+  const { books, updateBookProgress, updateBookCover, toggleBookmark } = useLibrary();
   const { settings, updateSettings } = useReaderSettings();
 
   const book = books.find((b) => b.id === id);
@@ -89,6 +89,12 @@ export default function ReaderScreen() {
     updateBookProgress(book.id, page, book.totalPages || totalPages, settings.incognitoMode);
   };
 
+  const handleCoverGenerated = (coverUrl: string) => {
+    if (!book.coverUrl) {
+      updateBookCover(book.id, coverUrl);
+    }
+  };
+
   const totalPages = book.totalPages && book.totalPages > 1 ? book.totalPages : 1;
 
   return (
@@ -111,6 +117,7 @@ export default function ReaderScreen() {
           settings={settings}
           currentPage={currentPage}
           onPageChange={handlePageChange}
+          onCoverGenerated={handleCoverGenerated}
           onToggleOverlay={() => setOverlayVisible((prev) => !prev)}
         />
       )}

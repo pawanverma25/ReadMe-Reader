@@ -28,6 +28,7 @@ interface LibraryContextType {
     totalPages?: number,
     isIncognito?: boolean
   ) => Promise<void>;
+  updateBookCover: (bookId: string, coverUrl: string) => Promise<void>;
   toggleBookmark: (bookId: string, page: number, title?: string) => Promise<void>;
   updateBookStatus: (bookId: string, status: StatusType) => Promise<void>;
   updateBookCategories: (bookId: string, categoryIds: string[]) => Promise<void>;
@@ -108,6 +109,12 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       };
     });
 
+    setBooks(updated);
+    await saveStoredBooks(updated);
+  };
+
+  const updateBookCover = async (bookId: string, coverUrl: string) => {
+    const updated = books.map((b) => (b.id === bookId ? { ...b, coverUrl } : b));
     setBooks(updated);
     await saveStoredBooks(updated);
   };
@@ -214,6 +221,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setViewMode,
         addBook,
         updateBookProgress,
+        updateBookCover,
         toggleBookmark,
         updateBookStatus,
         updateBookCategories,

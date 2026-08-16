@@ -9,6 +9,7 @@ interface PdfViewerCanvasProps {
   settings: ReaderSettings;
   currentPage: number;
   onPageChange: (page: number, totalPages: number) => void;
+  onCoverGenerated?: (coverUrl: string) => void;
   onToggleOverlay: () => void;
 }
 
@@ -18,6 +19,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   settings,
   currentPage,
   onPageChange,
+  onCoverGenerated,
   onToggleOverlay,
 }) => {
   const webViewRef = useRef<WebView>(null);
@@ -214,6 +216,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     let readingMode = "long_strip";
     let volumeKeyNav = false;
     let isInitialJumpDone = false;
+    let isCoverGenerated = false;
 
     let touchStartX = 0;
     let touchStartY = 0;
@@ -308,12 +311,24 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       if (!pdfDoc) return;
       try {
         const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
+        const viewport = page.getViewport({ scale: 1.2 });
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
         canvas.width = viewport.width;
 
         await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+        // Generate Page 1 PNG cover thumbnail data URL for library cards
+        if (pageNum === 1 && !isCoverGenerated) {
+          isCoverGenerated = true;
+          try {
+            const thumbUrl = canvas.toDataURL('image/png');
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'PAGE1_THUMBNAIL',
+              coverUrl: thumbUrl
+            }));
+          } catch (e) {}
+        }
       } catch (e) {
         console.error('Error rendering page ' + pageNum, e);
       }
@@ -496,6 +511,10 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         onToggleOverlay();
       } else if (data.type === 'PAGE_CHANGE') {
         onPageChange(data.page, data.totalPages);
+      } else if (data.type === 'PAGE1_THUMBNAIL') {
+        if (onCoverGenerated && data.coverUrl) {
+          onCoverGenerated(data.coverUrl);
+        }
       }
     } catch (e) {
       console.error('WebView postMessage error:', e);

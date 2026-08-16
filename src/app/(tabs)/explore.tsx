@@ -14,9 +14,9 @@ import { useLibrary } from '../../contexts/LibraryContext';
 import { AlertConfig, ThemedAlert } from '../../components/common/ThemedAlert';
 import {
   BookPlus,
-  Compass,
   FolderOpen,
   HardDrive,
+  ShieldCheck,
 } from 'lucide-react-native';
 
 export default function ExploreScreen() {
@@ -41,7 +41,8 @@ export default function ExploreScreen() {
   const handlePickDocument = async () => {
     try {
       setImporting(true);
-      // Strictly filter to PDF documents
+
+      // Launch system document picker intent with strict PDF filtering
       const res = await DocumentPicker.getDocumentAsync({
         type: 'application/pdf',
         copyToCacheDirectory: true,
@@ -54,12 +55,12 @@ export default function ExploreScreen() {
 
         const newBook = await addBook({
           title,
-          author: 'Local PDF File',
+          author: 'Local PDF Document',
           uri: file.uri,
           fileSize: file.size || 2500000,
-          totalPages: 40,
+          totalPages: 1,
           coverColor: colors.primary,
-          description: `Imported from local file storage (${file.name})`,
+          description: `Imported from device storage (${file.name})`,
           categoryIds: ['cat-all'],
         });
 
@@ -101,7 +102,7 @@ export default function ExploreScreen() {
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Import PDF Books</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Add local PDF eBooks & document files
+          Add local PDF eBooks & document files from device storage
         </Text>
       </View>
 
@@ -122,10 +123,10 @@ export default function ExploreScreen() {
 
           <View style={styles.heroTextContainer}>
             <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-              {importing ? 'Importing PDF...' : 'Select PDF File from Device'}
+              {importing ? 'Importing PDF...' : 'Select PDF File from Storage'}
             </Text>
             <Text style={[styles.heroDesc, { color: colors.textSecondary }]}>
-              Tap to browse your device files and select any .pdf book or document.
+              Tap to browse your device files and select any .pdf document.
             </Text>
           </View>
 
@@ -133,6 +134,14 @@ export default function ExploreScreen() {
             <BookPlus size={20} color={colors.onPrimary} />
           </View>
         </TouchableOpacity>
+
+        {/* Permission Info Pill */}
+        <View style={[styles.permCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <ShieldCheck size={18} color={colors.primary} />
+          <Text style={[styles.permText, { color: colors.textSecondary }]}>
+            100% Storage Permission Compliant — Uses system document picker intent.
+          </Text>
+        </View>
 
         {/* Stats Summary Card */}
         <View
@@ -169,7 +178,7 @@ export default function ExploreScreen() {
         </View>
       </ScrollView>
 
-      {/* Themed Mihon Alert */}
+      {/* Themed Custom Alert */}
       <ThemedAlert {...alertConfig} />
     </SafeAreaView>
   );
@@ -202,7 +211,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 16,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   heroIconBg: {
     width: 52,
@@ -231,6 +240,19 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  permCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    gap: 10,
+  },
+  permText: {
+    fontSize: 12,
+    flex: 1,
   },
   statsCard: {
     padding: 16,
