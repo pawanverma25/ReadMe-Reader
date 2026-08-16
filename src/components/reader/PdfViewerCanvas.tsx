@@ -23,33 +23,28 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   onToggleOverlay,
 }) => {
   const webViewRef = useRef<WebView>(null);
-  const pdfSentRef = useRef<boolean>(false);
+  const pdfLoadedRef = useRef<boolean>(false);
 
-  // Helper to send PDF payload into WebView safely
-  const sendPdfPayload = () => {
-    if (pdfBase64 && webViewRef.current) {
-      webViewRef.current.postMessage(
-        JSON.stringify({
-          action: 'LOAD_PDF_BASE64',
-          pdfBase64,
-          currentPage,
-          settings,
-        })
-      );
-      pdfSentRef.current = true;
-    }
-  };
-
-  // Send PDF Base64 data whenever pdfBase64 prop loads/updates
-  useEffect(() => {
-    if (pdfBase64) {
-      sendPdfPayload();
-    }
-  }, [pdfBase64]);
+  // Inject PDF Base64 string directly into V8 global window scope to bypass 1MB postMessage IPC limit
+  const injectedJS = useMemo(() => {
+    if (!pdfBase64) return '';
+    console.log('[PdfViewerCanvas] Preparing injectedJS payload. Base64 length:', pdfBase64.length);
+    return `
+      (function() {
+        window.__PDF_BASE64_DATA__ = "${pdfBase64}";
+        window.__PDF_INITIAL_PAGE__ = ${currentPage};
+        window.__PDF_INITIAL_SETTINGS__ = ${JSON.stringify(settings)};
+        if (typeof window.checkAndLoadPDF === 'function') {
+          window.checkAndLoadPDF();
+        }
+      })();
+      true;
+    `;
+  }, [book.id, pdfBase64]);
 
   // Send dynamic settings updates over postMessage WITHOUT reloading the WebView
   useEffect(() => {
-    if (webViewRef.current && pdfSentRef.current) {
+    if (webViewRef.current && pdfLoadedRef.current) {
       webViewRef.current.postMessage(
         JSON.stringify({
           action: 'UPDATE_SETTINGS',
@@ -69,7 +64,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
   // Send page jump over postMessage WITHOUT reloading the WebView
   useEffect(() => {
-    if (webViewRef.current && pdfSentRef.current) {
+    if (webViewRef.current && pdfLoadedRef.current) {
       webViewRef.current.postMessage(
         JSON.stringify({
           action: 'JUMP_TO_PAGE',
@@ -213,8 +208,38 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   </div>
 
   <script>
+    // Forward console logs to React Native
+    (function() {
+      const origLog = console.log;
+      const origErr = console.error;
+      const origWarn = console.warn;
+      console.log = function(...args) {
+        origLog.apply(console, args);
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CONSOLE_LOG', level: 'LOG', msg: args.join(' ') }));
+        }
+      };
+      console.error = function(...args) {
+        origErr.apply(console, args);
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CONSOLE_LOG', level: 'ERROR', msg: args.join(' ') }));
+        }
+      };
+      console.warn = function(...args) {
+        origWarn.apply(console, args);
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CONSOLE_LOG', level: 'WARN', msg: args.join(' ') }));
+        }
+      };
+    })();
+
+    console.log('[WebView HTML] Initializing WebView PDF script...');
+
     if (typeof pdfjsLib !== 'undefined') {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      console.log('[WebView HTML] PDF.js workerSrc set successfully.');
+    } else {
+      console.error('[WebView HTML] ERROR: pdfjsLib is undefined! Check CDN network.');
     }
 
     let pdfDoc = null;
@@ -228,32 +253,26 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     let touchStartX = 0;
     let touchStartY = 0;
 
-    // Send READY handshake to React Native
-    function sendReadySignal() {
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'WEBVIEW_READY' }));
-      }
-    }
-
-    // Polling handshake until pdfDoc is initialized
-    const readyInterval = setInterval(() => {
-      if (!pdfDoc) {
-        sendReadySignal();
-      } else {
-        clearInterval(readyInterval);
-      }
-    }, 400);
-
     function base64ToUint8Array(base64) {
+      console.log('[WebView HTML] Converting Base64 to Uint8Array...');
       const raw = atob(base64);
       const uint8Array = new Uint8Array(raw.length);
       for (let i = 0; i < raw.length; i++) {
         uint8Array[i] = raw.charCodeAt(i);
       }
+      console.log('[WebView HTML] Uint8Array conversion done. Byte length:', uint8Array.length);
       return uint8Array;
     }
 
+    window.checkAndLoadPDF = function() {
+      if (window.__PDF_BASE64_DATA__ && !pdfDoc) {
+        console.log('[WebView HTML] checkAndLoadPDF triggered! Found __PDF_BASE64_DATA__ length:', window.__PDF_BASE64_DATA__.length);
+        initPDFFromBase64(window.__PDF_BASE64_DATA__, window.__PDF_INITIAL_PAGE__, window.__PDF_INITIAL_SETTINGS__);
+      }
+    };
+
     async function initPDFFromBase64(base64Data, initialPage, initialSettings) {
+      console.log('[WebView HTML] initPDFFromBase64 called. Data length:', base64Data ? base64Data.length : 0);
       const loader = document.getElementById('loader');
       try {
         if (initialPage) currentPage = initialPage;
@@ -261,22 +280,26 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
         if (base64Data && base64Data.length > 100) {
           const buffer = base64ToUint8Array(base64Data);
+          console.log('[WebView HTML] Invoking pdfjsLib.getDocument({ data: buffer })...');
           const loadingTask = pdfjsLib.getDocument({ data: buffer });
           pdfDoc = await loadingTask.promise;
           totalPages = pdfDoc.numPages;
-          clearInterval(readyInterval);
+          console.log('[WebView HTML] PDF parsed successfully! Total pages:', totalPages);
+        } else {
+          console.warn('[WebView HTML] base64Data is missing or too short.');
         }
 
         if (loader) loader.style.display = 'none';
         renderView();
         notifyPageChange();
       } catch (err) {
-        console.error('PDF parsing error:', err);
-        if (loader) loader.innerText = 'Unable to render PDF document.';
+        console.error('[WebView HTML] PDF parsing error:', err);
+        if (loader) loader.innerText = 'Unable to render PDF document. Error: ' + err.message;
       }
     }
 
     function renderView() {
+      console.log('[WebView HTML] renderView called for readingMode:', readingMode, 'Total pages:', totalPages);
       const app = document.getElementById('app');
       const container = document.getElementById('scroll-container');
       app.innerHTML = '';
@@ -341,6 +364,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         canvas.width = viewport.width;
 
         await page.render({ canvasContext: context, viewport: viewport }).promise;
+        console.log('[WebView HTML] Rendered canvas for page', pageNum);
 
         // Generate Page 1 PNG cover thumbnail data URL for library cards
         if (pageNum === 1 && !isCoverGenerated) {
@@ -351,10 +375,12 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
               type: 'PAGE1_THUMBNAIL',
               coverUrl: thumbUrl
             }));
-          } catch (e) {}
+          } catch (e) {
+            console.error('[WebView HTML] Thumbnail canvas.toDataURL error:', e);
+          }
         }
       } catch (e) {
-        console.error('Error rendering page ' + pageNum, e);
+        console.error('[WebView HTML] Error rendering page ' + pageNum, e);
       }
     }
 
@@ -497,9 +523,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         if (!event.data || typeof event.data !== 'string') return;
         const data = JSON.parse(event.data);
 
-        if (data.action === 'LOAD_PDF_BASE64') {
-          initPDFFromBase64(data.pdfBase64, data.currentPage, data.settings);
-        } else if (data.action === 'JUMP_TO_PAGE') {
+        if (data.action === 'JUMP_TO_PAGE') {
           if (currentPage !== data.page) {
             currentPage = data.page;
             if (readingMode === 'long_strip') {
@@ -519,10 +543,14 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         } else if (data.action === 'PREV_PAGE') {
           prevPage();
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('[WebView HTML] window message error:', e);
+      }
     });
 
-    sendReadySignal();
+    document.addEventListener('DOMContentLoaded', () => {
+      window.checkAndLoadPDF();
+    });
   </script>
 </body>
 </html>
@@ -533,24 +561,25 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     try {
       if (!event.nativeEvent.data) return;
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'WEBVIEW_READY') {
-        sendPdfPayload();
+      if (data.type === 'CONSOLE_LOG') {
+        console.log(`[WebView ${data.level || 'LOG'}]`, data.msg);
       } else if (data.type === 'TOGGLE_OVERLAY') {
         onToggleOverlay();
       } else if (data.type === 'PAGE_CHANGE') {
         onPageChange(data.page, data.totalPages);
       } else if (data.type === 'PAGE1_THUMBNAIL') {
+        console.log('[PdfViewerCanvas] Received PAGE1_THUMBNAIL Data URL from WebView!');
         if (onCoverGenerated && data.coverUrl) {
           onCoverGenerated(data.coverUrl);
         }
       }
     } catch (e) {
-      console.error('WebView postMessage error:', e);
+      console.error('[PdfViewerCanvas handleMessage] Error:', e);
     }
   };
 
   const handleWebViewLoad = () => {
-    sendPdfPayload();
+    pdfLoadedRef.current = true;
   };
 
   return (
@@ -559,6 +588,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         ref={webViewRef}
         originWhitelist={['*']}
         source={{ html: htmlContent }}
+        injectedJavaScriptBeforeContentLoaded={injectedJS}
         onMessage={handleMessage}
         onLoadEnd={handleWebViewLoad}
         style={styles.webview}

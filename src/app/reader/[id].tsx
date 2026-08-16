@@ -50,18 +50,19 @@ export default function ReaderScreen() {
         setLoading(true);
         setLoadError(null);
 
-        // Read PDF file as Base64 string directly from file system
+        console.log('[ReaderScreen] Starting FileSystem.readAsStringAsync for book:', book.title, 'URI:', book.uri);
         const base64Data = await FileSystem.readAsStringAsync(book.uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
+        console.log('[ReaderScreen] FileSystem read complete! Base64 length:', base64Data ? base64Data.length : 0);
 
         if (isMounted) {
           setPdfBase64(base64Data);
         }
       } catch (err: any) {
-        console.error('Error reading PDF file into Base64:', err);
+        console.error('[ReaderScreen] Error reading PDF file into Base64:', err);
         if (isMounted) {
-          setLoadError('Unable to load PDF file. Please verify the file path.');
+          setLoadError(`Unable to load PDF file (${err.message || 'File error'}).`);
         }
       } finally {
         if (isMounted) setLoading(false);
