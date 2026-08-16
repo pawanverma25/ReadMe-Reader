@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  PermissionsAndroid,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -41,6 +43,23 @@ export default function ExploreScreen() {
   const handlePickDocument = async () => {
     try {
       setImporting(true);
+
+      // Trigger Native Android System Permission Dialog
+      if (Platform.OS === 'android') {
+        try {
+          await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+            {
+              title: 'Storage Access Permission Required',
+              message: 'ReadMe requires access to your device file storage to browse and import local PDF books.',
+              buttonPositive: 'Allow Access',
+              buttonNegative: 'Cancel',
+            }
+          );
+        } catch (pErr) {
+          console.warn('PermissionsAndroid error:', pErr);
+        }
+      }
 
       // Launch system document picker intent with strict PDF filtering
       const res = await DocumentPicker.getDocumentAsync({

@@ -23,11 +23,11 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   onToggleOverlay,
 }) => {
   const webViewRef = useRef<WebView>(null);
-  const pdfLoadedRef = useRef<boolean>(false);
+  const pdfSentRef = useRef<boolean>(false);
 
-  // Send PDF Base64 data to WebView when ready
-  useEffect(() => {
-    if (pdfBase64 && webViewRef.current && !pdfLoadedRef.current) {
+  // Helper to send PDF payload into WebView safely
+  const sendPdfPayload = () => {
+    if (pdfBase64 && webViewRef.current) {
       webViewRef.current.postMessage(
         JSON.stringify({
           action: 'LOAD_PDF_BASE64',
@@ -36,13 +36,20 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
           settings,
         })
       );
-      pdfLoadedRef.current = true;
+      pdfSentRef.current = true;
+    }
+  };
+
+  // Send PDF Base64 data whenever pdfBase64 prop loads/updates
+  useEffect(() => {
+    if (pdfBase64) {
+      sendPdfPayload();
     }
   }, [pdfBase64]);
 
   // Send dynamic settings updates over postMessage WITHOUT reloading the WebView
   useEffect(() => {
-    if (webViewRef.current && pdfLoadedRef.current) {
+    if (webViewRef.current && pdfSentRef.current) {
       webViewRef.current.postMessage(
         JSON.stringify({
           action: 'UPDATE_SETTINGS',
@@ -62,7 +69,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
   // Send page jump over postMessage WITHOUT reloading the WebView
   useEffect(() => {
-    if (webViewRef.current && pdfLoadedRef.current) {
+    if (webViewRef.current && pdfSentRef.current) {
       webViewRef.current.postMessage(
         JSON.stringify({
           action: 'JUMP_TO_PAGE',
@@ -194,7 +201,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       text-align: center;
       font-size: 15px;
       font-weight: 600;
-      opacity: 0.75;
+      opacity: 0.85;
     }
   </style>
 </head>
@@ -221,6 +228,22 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     let touchStartX = 0;
     let touchStartY = 0;
 
+    // Send READY handshake to React Native
+    function sendReadySignal() {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'WEBVIEW_READY' }));
+      }
+    }
+
+    // Polling handshake until pdfDoc is initialized
+    const readyInterval = setInterval(() => {
+      if (!pdfDoc) {
+        sendReadySignal();
+      } else {
+        clearInterval(readyInterval);
+      }
+    }, 400);
+
     function base64ToUint8Array(base64) {
       const raw = atob(base64);
       const uint8Array = new Uint8Array(raw.length);
@@ -241,6 +264,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
           const loadingTask = pdfjsLib.getDocument({ data: buffer });
           pdfDoc = await loadingTask.promise;
           totalPages = pdfDoc.numPages;
+          clearInterval(readyInterval);
         }
 
         if (loader) loader.style.display = 'none';
@@ -497,6 +521,8 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         }
       } catch (e) {}
     });
+
+    sendReadySignal();
   </script>
 </body>
 </html>
@@ -507,7 +533,9 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     try {
       if (!event.nativeEvent.data) return;
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'TOGGLE_OVERLAY') {
+      if (data.type === 'WEBVIEW_READY') {
+        sendPdfPayload();
+      } else if (data.type === 'TOGGLE_OVERLAY') {
         onToggleOverlay();
       } else if (data.type === 'PAGE_CHANGE') {
         onPageChange(data.page, data.totalPages);
@@ -522,17 +550,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   };
 
   const handleWebViewLoad = () => {
-    if (pdfBase64 && webViewRef.current) {
-      webViewRef.current.postMessage(
-        JSON.stringify({
-          action: 'LOAD_PDF_BASE64',
-          pdfBase64,
-          currentPage,
-          settings,
-        })
-      );
-      pdfLoadedRef.current = true;
-    }
+    sendPdfPayload();
   };
 
   return (

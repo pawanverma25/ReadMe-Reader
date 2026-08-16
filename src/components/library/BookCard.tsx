@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Book } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Bookmark, CheckCircle2, Heart, Star } from 'lucide-react-native';
+import { Bookmark, CheckCircle2, FileText, Heart } from 'lucide-react-native';
 
 interface BookCardProps {
   book: Book;
@@ -25,7 +25,7 @@ export const BookCard: React.FC<BookCardProps> = ({
   );
 
   const coverBg = book.coverColor || colors.primary;
-  const hasCoverImage = Boolean(book.coverUrl);
+  const hasCoverImage = Boolean(book.coverUrl && book.coverUrl.length > 20);
 
   if (viewMode === 'list') {
     return (
@@ -39,9 +39,9 @@ export const BookCard: React.FC<BookCardProps> = ({
           {hasCoverImage ? (
             <Image source={{ uri: book.coverUrl }} style={styles.coverImage} resizeMode="cover" />
           ) : (
-            <Text style={styles.coverInitials}>
-              {book.title.substring(0, 2).toUpperCase()}
-            </Text>
+            <View style={styles.fallbackCoverBox}>
+              <FileText size={20} color="#FFFFFF" />
+            </View>
           )}
 
           {book.status === 'completed' && (
@@ -73,7 +73,7 @@ export const BookCard: React.FC<BookCardProps> = ({
               />
             </View>
             <Text style={[styles.progressText, { color: colors.textSecondary }]}>
-              Page {book.currentPage} of {book.totalPages} ({progressPercent}%)
+              Page {book.currentPage} of {book.totalPages || 1} ({progressPercent}%)
             </Text>
           </View>
         </View>
@@ -105,9 +105,15 @@ export const BookCard: React.FC<BookCardProps> = ({
         {hasCoverImage ? (
           <Image source={{ uri: book.coverUrl }} style={styles.coverImage} resizeMode="cover" />
         ) : (
-          <Text style={[styles.gridCoverText, isCompact && { fontSize: 18 }]}>
-            {book.title.substring(0, 2).toUpperCase()}
-          </Text>
+          <View style={styles.bookCoverFallbackContainer}>
+            <View style={styles.bookCoverBadgeHeader}>
+              <FileText size={isCompact ? 20 : 28} color="#FFFFFF" />
+              <Text style={styles.pdfPillBadge}>PDF</Text>
+            </View>
+            <Text style={[styles.gridCoverTitleText, isCompact && { fontSize: 12 }]} numberOfLines={2}>
+              {book.title}
+            </Text>
+          </View>
         )}
 
         {/* Top Badges */}
@@ -197,12 +203,39 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  gridCoverText: {
+  bookCoverFallbackContainer: {
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  bookCoverBadgeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  pdfPillBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
     color: '#FFFFFF',
-    fontSize: 26,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    opacity: 0.85,
+    fontSize: 9,
+    fontWeight: '800',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  gridCoverTitleText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 17,
+  },
+  fallbackCoverBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   badgeOverlay: {
     position: 'absolute',
@@ -271,11 +304,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
-  },
-  coverInitials: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   badgeTopRight: {
     position: 'absolute',
