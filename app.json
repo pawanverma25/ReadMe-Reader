@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#16131B"
+      "backgroundColor": "#0E0D14"
     },
     "ios": {
       "supportsTablet": true,
@@ -18,9 +18,11 @@
     },
     "android": {
       "package": "com.readme.pdfreader",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#16131B",
-        "foregroundImage": "./assets/images/android-icon-foreground.png"
+        "backgroundColor": "#0E0D14",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "permissions": [
         "READ_EXTERNAL_STORAGE",
@@ -38,7 +40,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "backgroundColor": "#16131B",
+          "backgroundColor": "#0E0D14",
           "imageWidth": 120
         }
       ],
