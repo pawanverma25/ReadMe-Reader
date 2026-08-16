@@ -20,7 +20,7 @@ export default function ReaderScreen() {
   const book = books.find((b) => b.id === id);
   const [currentPage, setCurrentPage] = useState<number>(book?.currentPage || 1);
   const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
-  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+  const [pdfFileUri, setPdfFileUri] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -37,10 +37,10 @@ export default function ReaderScreen() {
     };
   }, [overlayVisible]);
 
-  // Load PDF file as Base64 string for 100% offline PDF.js canvas rendering
+  // Zero-RAM Streaming: Copy content:// or file:// URI to cache directory for direct PDF.js disk streaming
   useEffect(() => {
     let isMounted = true;
-    async function loadPdfFile() {
+    async function preparePdfFile() {
       if (!book || !book.uri) {
         if (isMounted) setLoading(false);
         return;
@@ -50,24 +50,26 @@ export default function ReaderScreen() {
         setLoading(true);
         setLoadError(null);
 
-        if (book.uri.startsWith('content://') || book.uri.startsWith('file://')) {
-          const base64 = await FileSystem.readAsStringAsync(book.uri, {
-            encoding: FileSystem.EncodingType.Base64,
+        if (book.uri.startsWith('content://')) {
+          const destUri = `${FileSystem.cacheDirectory}reader_${book.id}.pdf`;
+          await FileSystem.copyAsync({
+            from: book.uri,
+            to: destUri,
           });
-          if (isMounted) setPdfBase64(base64);
+          if (isMounted) setPdfFileUri(destUri);
         } else {
-          // Fallback URI or sample
-          if (isMounted) setPdfBase64(null);
+          if (isMounted) setPdfFileUri(book.uri);
         }
       } catch (err: any) {
-        console.error('Error reading PDF Base64:', err);
-        if (isMounted) setLoadError(err?.message || 'Could not load PDF file');
+        console.error('Error preparing PDF file stream:', err);
+        // Fallback to original URI
+        if (isMounted) setPdfFileUri(book.uri);
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    loadPdfFile();
+    preparePdfFile();
     return () => {
       isMounted = false;
     };
@@ -104,7 +106,7 @@ export default function ReaderScreen() {
       ) : (
         <PdfViewerCanvas
           book={book}
-          pdfBase64={pdfBase64}
+          pdfFileUri={pdfFileUri}
           settings={settings}
           currentPage={currentPage}
           onPageChange={handlePageChange}

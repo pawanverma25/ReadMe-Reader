@@ -5,7 +5,7 @@ import { Book, ReaderSettings } from '../../types';
 
 interface PdfViewerCanvasProps {
   book: Book;
-  pdfBase64: string | null;
+  pdfFileUri: string | null;
   settings: ReaderSettings;
   currentPage: number;
   onPageChange: (page: number, totalPages: number) => void;
@@ -14,7 +14,7 @@ interface PdfViewerCanvasProps {
 
 export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   book,
-  pdfBase64,
+  pdfFileUri,
   settings,
   currentPage,
   onPageChange,
@@ -54,6 +54,22 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     }
   }, [currentPage]);
 
+  // Get initial background color based on theme
+  const initialBgColor = () => {
+    switch (settings.readerTheme) {
+      case 'oled':
+        return '#000000';
+      case 'dark':
+        return '#16131B';
+      case 'sepia':
+        return '#F4ECD8';
+      case 'light':
+        return '#FFFFFF';
+      default:
+        return '#000000';
+    }
+  };
+
   // Construct static base HTML string ONCE so WebView source prop NEVER changes
   const htmlContent = useMemo(() => {
     return `
@@ -63,6 +79,12 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
+    :root {
+      --bg-color: ${initialBgColor()};
+      --side-padding: ${settings.sidePadding || 0}%;
+      --canvas-filter: none;
+    }
+
     * {
       box-sizing: border-box;
       user-select: none;
@@ -73,7 +95,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     html, body {
       width: 100%;
       height: 100%;
-      background-color: #000000;
+      background-color: var(--bg-color);
       color: #FFFFFF;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       overflow: hidden;
@@ -85,8 +107,9 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       height: 100%;
       overflow-x: hidden;
       overflow-y: auto;
-      padding-left: ${settings.sidePadding || 0}%;
-      padding-right: ${settings.sidePadding || 0}%;
+      padding-left: var(--side-padding);
+      padding-right: var(--side-padding);
+      background-color: var(--bg-color);
       transition: padding 0.2s ease, background-color 0.2s ease;
     }
 
@@ -94,7 +117,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     .long-strip {
       display: flex;
       flex-direction: column;
-      gap: ${settings.cropBorders ? '0px' : '8px'};
+      gap: 6px;
       padding: 10px 0;
       width: 100%;
       align-items: center;
@@ -147,6 +170,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       object-fit: contain;
       box-shadow: 0 4px 16px rgba(0,0,0,0.5);
       border-radius: 4px;
+      filter: var(--canvas-filter);
       transition: filter 0.2s ease;
     }
 
@@ -179,27 +203,17 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     let currentPage = ${currentPage || 1};
     let readingMode = "${settings.readingMode}";
     let volumeKeyNav = ${Boolean(settings.volumeKeyNavigation)};
-    let pdfBase64Data = "${pdfBase64 || ''}";
+    let pdfFileUri = "${pdfFileUri || ''}";
     let isInitialJumpDone = false;
 
     let touchStartX = 0;
     let touchStartY = 0;
 
-    function base64ToUint8Array(base64) {
-      const raw = atob(base64);
-      const uint8Array = new Uint8Array(raw.length);
-      for (let i = 0; i < raw.length; i++) {
-        uint8Array[i] = raw.charCodeAt(i);
-      }
-      return uint8Array;
-    }
-
     async function loadPDFDocument() {
       const loader = document.getElementById('loader');
       try {
-        if (pdfBase64Data && pdfBase64Data.length > 100) {
-          const buffer = base64ToUint8Array(pdfBase64Data);
-          const loadingTask = pdfjsLib.getDocument({ data: buffer });
+        if (pdfFileUri && pdfFileUri.length > 5) {
+          const loadingTask = pdfjsLib.getDocument({ url: pdfFileUri, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true });
           pdfDoc = await loadingTask.promise;
           totalPages = pdfDoc.numPages;
         }
@@ -208,8 +222,8 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         renderView();
         notifyPageChange();
       } catch (err) {
-        console.error('PDF parsing error:', err);
-        if (loader) loader.innerText = 'Rendering fallback PDF...';
+        console.error('PDF stream error:', err);
+        if (loader) loader.innerText = 'Rendering fallback canvas...';
         renderFallbackCanvas();
       }
     }
@@ -410,28 +424,25 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       }));
     }
 
-    // Dynamic settings updater without page reload
+    // Dynamic CSS Custom Variable updater without page reload
     function applyDynamicSettings(s) {
-      const body = document.body;
-      const container = document.getElementById('scroll-container');
+      const root = document.documentElement;
 
       if (s.readerTheme) {
         const bgMap = { oled: '#000000', dark: '#16131B', sepia: '#F4ECD8', light: '#FFFFFF' };
         const bgColor = bgMap[s.readerTheme] || '#000000';
-        body.style.backgroundColor = bgColor;
-        if (container) container.style.backgroundColor = bgColor;
+        root.style.setProperty('--bg-color', bgColor);
       }
 
-      if (s.sidePadding !== undefined && container) {
-        container.style.paddingLeft = s.sidePadding + '%';
-        container.style.paddingRight = s.sidePadding + '%';
+      if (s.sidePadding !== undefined) {
+        root.style.setProperty('--side-padding', s.sidePadding + '%');
       }
 
       let filters = [];
       if (s.grayscale) filters.push('grayscale(100%)');
       if (s.inverted) filters.push('invert(100%) hue-rotate(180deg)');
       const filterStr = filters.length > 0 ? filters.join(' ') : 'none';
-      document.querySelectorAll('canvas').forEach(c => c.style.filter = filterStr);
+      root.style.setProperty('--canvas-filter', filterStr);
 
       if (s.readingMode && s.readingMode !== readingMode) {
         readingMode = s.readingMode;
@@ -439,9 +450,10 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       }
     }
 
-    // Message listener from React Native
+    // Safe Message listener from React Native
     window.addEventListener('message', (event) => {
       try {
+        if (!event.data || typeof event.data !== 'string') return;
         const data = JSON.parse(event.data);
         if (data.action === 'JUMP_TO_PAGE') {
           if (currentPage !== data.page) {
@@ -471,10 +483,11 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 </body>
 </html>
     `;
-  }, [book.id, pdfBase64]);
+  }, [book.id, pdfFileUri]);
 
   const handleMessage = (event: any) => {
     try {
+      if (!event.nativeEvent.data) return;
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'TOGGLE_OVERLAY') {
         onToggleOverlay();
