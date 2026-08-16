@@ -63,15 +63,16 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     settings.volumeKeyNavigation,
   ]);
 
-  // Send page jump over postMessage WITHOUT reloading the WebView
+  // Inject page jump directly into V8 engine WITHOUT reloading the WebView
   useEffect(() => {
-    if (webViewRef.current && pdfLoadedRef.current) {
-      webViewRef.current.postMessage(
-        JSON.stringify({
-          action: 'JUMP_TO_PAGE',
-          page: currentPage,
-        })
-      );
+    if (webViewRef.current) {
+      console.log('[PdfViewerCanvas] Injecting jumpToPage into V8 engine:', currentPage);
+      webViewRef.current.injectJavaScript(`
+        if (typeof window.jumpToPage === 'function') {
+          window.jumpToPage(${currentPage});
+        }
+        true;
+      `);
     }
   }, [currentPage]);
 
@@ -457,6 +458,20 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         e.preventDefault();
       }
     });
+
+    function jumpToPage(p) {
+      console.log('[WebView HTML] jumpToPage called with target page:', p);
+      if (currentPage !== p) {
+        currentPage = p;
+        if (readingMode === 'long_strip') {
+          const target = document.getElementById('page-wrapper-' + currentPage);
+          if (target) target.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          updateSliderPosition();
+        }
+      }
+    }
+    window.jumpToPage = jumpToPage;
 
     function nextPage() {
       if (currentPage < totalPages) {
