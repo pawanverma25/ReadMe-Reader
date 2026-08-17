@@ -63,6 +63,11 @@
 
 ---
 
+## 👩‍💻 Developer Collaboration & Architecture
+For comprehensive architectural patterns, V8 memory injection rules, and engineering guidelines, check out the [Developer Skills & Collaboration Guide](file:///C:/Users/pawan/Documents/antigravity/intelligent-darwin/SKILLS.md).
+
+---
+
 ## 🚀 Getting Started
 
 ### Prerequisites
