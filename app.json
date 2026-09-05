@@ -41,7 +41,17 @@
       ],
       "expo-sharing",
       "expo-document-picker",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class com.swmansion.reanimated.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.facebook.react.** { *; }\n-keepclassmembers class * extends com.facebook.react.bridge.JavaScriptModule { *; }\n-keepclassmembers class * extends com.facebook.react.bridge.NativeModule { *; }\n-keep class com.reactnativecommunity.webview.** { *; }\n-keep class com.reactnativecommunity.asyncstorage.** { *; }\n-keep class expo.modules.** { *; }\n-dontwarn com.facebook.react.**\n-dontwarn expo.modules.**"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

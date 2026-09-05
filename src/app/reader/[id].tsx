@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { setStatusBarHidden } from 'expo-status-bar';
@@ -7,7 +7,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useReaderSettings } from '../../contexts/ReaderContext';
-import { PdfViewerCanvas } from '../../components/reader/PdfViewerCanvas';
+import { PdfViewerCanvas, PdfViewerCanvasRef } from '../../components/reader/PdfViewerCanvas';
 import { ReaderOverlay } from '../../components/reader/ReaderOverlay';
 
 export default function ReaderScreen() {
@@ -23,6 +23,9 @@ export default function ReaderScreen() {
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const canvasRef = useRef<PdfViewerCanvasRef>(null);
+  const saveProgressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Keep screen awake while reading
   if (settings.keepScreenOn) {
     useKeepAwake();
@@ -35,6 +38,26 @@ export default function ReaderScreen() {
       setStatusBarHidden(false, 'fade');
     };
   }, [overlayVisible]);
+
+  // Clean up debounced storage write on unmount
+  useEffect(() => {
+    return () => {
+      if (saveProgressTimeoutRef.current) {
+        clearTimeout(saveProgressTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Debounced progress saver to prevent Android AsyncStorage disk lock contention during rapid scrolling
+  const debouncedSaveProgress = (page: number, tPages: number) => {
+    if (!book) return;
+    if (saveProgressTimeoutRef.current) {
+      clearTimeout(saveProgressTimeoutRef.current);
+    }
+    saveProgressTimeoutRef.current = setTimeout(() => {
+      updateBookProgress(book.id, page, tPages, settings.incognitoMode);
+    }, 500);
+  };
 
   // Verify file existence without loading entire file into JVM string memory
   useEffect(() => {
@@ -81,14 +104,17 @@ export default function ReaderScreen() {
     return null;
   }
 
+  // Triggered when WebView scrolls or swipes (receiver only: no echo loop)
   const handlePageChange = (page: number, totalPages: number) => {
     setCurrentPage(page);
-    updateBookProgress(book.id, page, totalPages, settings.incognitoMode);
+    debouncedSaveProgress(page, totalPages);
   };
 
+  // Triggered only by user actions in React Native HUD (Next/Prev button, jump dialog, bookmark)
   const handlePageSelect = (page: number) => {
     setCurrentPage(page);
-    updateBookProgress(book.id, page, book.totalPages || totalPages, settings.incognitoMode);
+    canvasRef.current?.jumpToPage(page);
+    debouncedSaveProgress(page, book.totalPages || totalPages);
   };
 
   const handleCoverGenerated = (coverUrl: string) => {
@@ -114,6 +140,7 @@ export default function ReaderScreen() {
         </View>
       ) : (
         <PdfViewerCanvas
+          ref={canvasRef}
           book={book}
           fileUri={book.uri}
           settings={settings}

@@ -1,7 +1,13 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Book, ReaderSettings } from '../../types';
+
+export interface PdfViewerCanvasRef {
+  jumpToPage: (page: number) => void;
+  nextPage: () => void;
+  prevPage: () => void;
+}
 
 interface PdfViewerCanvasProps {
   book: Book;
@@ -13,74 +19,87 @@ interface PdfViewerCanvasProps {
   onToggleOverlay: () => void;
 }
 
-export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
-  book,
-  fileUri,
-  settings,
-  currentPage,
-  onPageChange,
-  onCoverGenerated,
-  onToggleOverlay,
-}) => {
-  const webViewRef = useRef<WebView>(null);
-  const pdfLoadedRef = useRef<boolean>(false);
-  const lastWebViewPageRef = useRef<number>(currentPage);
+export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCanvasProps>(
+  (
+    {
+      book,
+      fileUri,
+      settings,
+      currentPage,
+      onPageChange,
+      onCoverGenerated,
+      onToggleOverlay,
+    },
+    ref
+  ) => {
+    const webViewRef = useRef<WebView>(null);
+    const pdfLoadedRef = useRef<boolean>(false);
 
-  // Inject PDF file URI directly into V8 global window scope (0 JVM Heap allocation)
-  const injectedJS = useMemo(() => {
-    console.log('[PdfViewerCanvas] Preparing injectedJS payload. File URI:', fileUri);
-    return `
-      (function() {
-        window.__PDF_FILE_URI__ = "${fileUri}";
-        window.__PDF_INITIAL_PAGE__ = ${currentPage};
-        window.__PDF_INITIAL_SETTINGS__ = ${JSON.stringify(settings)};
-        if (typeof window.checkAndLoadPDF === 'function') {
-          window.checkAndLoadPDF();
-        }
-      })();
-      true;
-    `;
-  }, [book.id, fileUri]);
+    // Expose explicit programmatic controls to React Native UI without bidirectional echo
+    useImperativeHandle(ref, () => ({
+      jumpToPage: (page: number) => {
+        console.log('[PdfViewerCanvas] Imperative jumpToPage called:', page);
+        webViewRef.current?.injectJavaScript(`
+          if (typeof window.jumpToPage === 'function') {
+            window.jumpToPage(${page});
+          }
+          true;
+        `);
+      },
+      nextPage: () => {
+        webViewRef.current?.injectJavaScript(`
+          if (typeof window.nextPage === 'function') {
+            window.nextPage();
+          }
+          true;
+        `);
+      },
+      prevPage: () => {
+        webViewRef.current?.injectJavaScript(`
+          if (typeof window.prevPage === 'function') {
+            window.prevPage();
+          }
+          true;
+        `);
+      },
+    }));
 
-  // Inject dynamic settings updates directly into V8 engine WITHOUT reloading the WebView
-  useEffect(() => {
-    if (webViewRef.current) {
-      console.log('[PdfViewerCanvas] Injecting dynamic settings into V8 engine:', settings);
-      webViewRef.current.injectJavaScript(`
-        if (typeof window.applyDynamicSettings === 'function') {
-          window.applyDynamicSettings(${JSON.stringify(settings)});
-        }
+    // Inject PDF file URI directly into V8 global window scope (0 JVM Heap allocation)
+    const injectedJS = useMemo(() => {
+      console.log('[PdfViewerCanvas] Preparing injectedJS payload. File URI:', fileUri);
+      return `
+        (function() {
+          window.__PDF_FILE_URI__ = "${fileUri}";
+          window.__PDF_INITIAL_PAGE__ = ${currentPage};
+          window.__PDF_INITIAL_SETTINGS__ = ${JSON.stringify(settings)};
+          if (typeof window.checkAndLoadPDF === 'function') {
+            window.checkAndLoadPDF();
+          }
+        })();
         true;
-      `);
-    }
-  }, [
-    settings.readerTheme,
-    settings.readingMode,
-    settings.sidePadding,
-    settings.grayscale,
-    settings.inverted,
-    settings.cropBorders,
-    settings.volumeKeyNavigation,
-  ]);
+      `;
+    }, [book.id, fileUri]);
 
-  // Inject page jump directly into V8 engine WITHOUT reloading the WebView
-  // Breaks the bidirectional echo loop: only inject if change was initiated by React Native UI
-  useEffect(() => {
-    if (webViewRef.current) {
-      if (currentPage === lastWebViewPageRef.current) {
-        // Page was updated by WebView scroll/swipe gesture, do not echo back
-        return;
+    // Inject dynamic settings updates directly into V8 engine WITHOUT reloading the WebView
+    useEffect(() => {
+      if (webViewRef.current) {
+        console.log('[PdfViewerCanvas] Injecting dynamic settings into V8 engine:', settings);
+        webViewRef.current.injectJavaScript(`
+          if (typeof window.applyDynamicSettings === 'function') {
+            window.applyDynamicSettings(${JSON.stringify(settings)});
+          }
+          true;
+        `);
       }
-      lastWebViewPageRef.current = currentPage;
-      console.log('[PdfViewerCanvas] Injecting jumpToPage into V8 engine:', currentPage);
-      webViewRef.current.injectJavaScript(`
-        if (typeof window.jumpToPage === 'function') {
-          window.jumpToPage(${currentPage});
-        }
-        true;
-      `);
-    }
-  }, [currentPage]);
+    }, [
+      settings.readerTheme,
+      settings.readingMode,
+      settings.sidePadding,
+      settings.grayscale,
+      settings.inverted,
+      settings.cropBorders,
+      settings.volumeKeyNavigation,
+    ]);
 
   // Construct static base HTML string ONCE so WebView source prop NEVER changes
   const htmlContent = useMemo(() => {
@@ -268,12 +287,16 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     let isInitialJumpDone = false;
     let isCoverGenerated = false;
 
-    // Gesture & Animation locks to prevent scroll animation restarts
+    // Gesture & Animation queue for Single Page mode (glitch-free back-to-back swiping)
     let isTransitioning = false;
+    let pendingNavDirection = 0; // +1 for next, -1 for prev
     let transitionTimeout = null;
     let isUserTouching = false;
     let touchStartX = 0;
     let touchStartY = 0;
+
+    // Estimated page height based on page aspect ratio (stabilizes scroll container, 0 layout shifts)
+    let estimatedPageHeight = Math.round(window.innerWidth * 1.414);
 
     // Page rendering cache & virtualization maps
     const renderedPages = new Set();
@@ -375,12 +398,13 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         const strip = document.createElement('div');
         strip.className = 'long-strip';
 
-        // Pre-create placeholder wrappers without rendering all canvases at once
+        // Pre-create placeholder wrappers with locked uniform minHeight to prevent scroll jumping
         for (let i = 1; i <= totalPages; i++) {
           const wrapper = document.createElement('div');
           wrapper.id = 'page-wrapper-' + i;
           wrapper.className = 'page-wrapper';
           wrapper.setAttribute('data-page', i);
+          wrapper.style.minHeight = estimatedPageHeight + 'px';
 
           const placeholder = document.createElement('div');
           placeholder.className = 'page-placeholder';
@@ -429,11 +453,8 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
           slider.appendChild(wrapper);
         }
 
-        // Attach transitionend listener to release animation lock
-        slider.addEventListener('transitionend', () => {
-          isTransitioning = false;
-          if (transitionTimeout) clearTimeout(transitionTimeout);
-        });
+        // Attach transitionend listener to dequeue back-to-back gestures
+        slider.addEventListener('transitionend', onSliderTransitionEnd);
 
         viewport.appendChild(slider);
         app.appendChild(viewport);
@@ -445,7 +466,6 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
     // Virtualized IntersectionObserver for Long Strip mode
     function setupVirtualizedLongStrip() {
       if (!('IntersectionObserver' in window)) {
-        // Fallback: render first 10 pages
         for (let i = 1; i <= Math.min(10, totalPages); i++) {
           ensurePageRendered(i);
         }
@@ -459,15 +479,15 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
           if (entry.isIntersecting) {
             ensurePageRendered(pNum);
           } else {
-            // Free canvases that are more than 6 pages away to conserve GPU/RAM
-            if (Math.abs(pNum - currentPage) > 6) {
+            // Free canvases that are distant to conserve GPU/RAM, only if memory pressure warrants
+            if (Math.abs(pNum - currentPage) > 5 && renderedPages.size > 10) {
               freePageCanvas(pNum);
             }
           }
         });
       }, {
         root: document.getElementById('scroll-container'),
-        rootMargin: '120% 0px 120% 0px' // Buffer of ~1.2 screens above and below
+        rootMargin: '120% 0px 120% 0px'
       });
 
       const wrappers = document.querySelectorAll('.long-strip .page-wrapper');
@@ -496,7 +516,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       renderedPages.add(pageNum);
     }
 
-    // Free canvas memory for distant pages
+    // Free canvas memory for distant pages without collapsing wrapper height
     function freePageCanvas(pageNum) {
       if (pageNum === 1) return; // Keep page 1 for cover thumbnail
       if (!renderedPages.has(pageNum)) return;
@@ -506,8 +526,9 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
       const canvas = wrapper.querySelector('canvas');
       if (canvas) {
-        // Lock current wrapper height so scrollbar doesn't jump
-        wrapper.style.minHeight = canvas.clientHeight + 'px';
+        if (canvas.clientHeight > 0) {
+          wrapper.style.minHeight = canvas.clientHeight + 'px';
+        }
         canvas.remove();
       }
 
@@ -526,7 +547,6 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         }
       });
 
-      // Free pages outside the 5-page radius
       for (const p of renderedPages) {
         if (Math.abs(p - currentPage) > 2) {
           freePageCanvas(p);
@@ -543,11 +563,22 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         canvas.height = viewport.height;
         canvas.width = viewport.width;
 
-        if (wrapper) {
-          wrapper.style.minHeight = 'unset';
+        // Calculate and stabilize uniform page aspect ratio from page 1
+        if (pageNum === 1 && viewport.width > 0) {
+          const ratio = viewport.height / viewport.width;
+          estimatedPageHeight = Math.round(window.innerWidth * ratio);
+        }
+
+        const actualHeight = Math.round((window.innerWidth / (viewport.width || 1)) * viewport.height);
+        if (wrapper && readingMode === 'long_strip') {
+          wrapper.style.minHeight = (canvas.clientHeight || actualHeight || estimatedPageHeight) + 'px';
         }
 
         await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+        if (wrapper && readingMode === 'long_strip' && canvas.clientHeight > 0) {
+          wrapper.style.minHeight = canvas.clientHeight + 'px';
+        }
 
         // Generate Page 1 PNG cover thumbnail data URL for library cards
         if (pageNum === 1 && !isCoverGenerated) {
@@ -573,14 +604,48 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
         if (!animate) {
           slider.style.transition = 'none';
         } else {
-          slider.style.transition = 'transform 0.32s cubic-bezier(0.25, 1, 0.5, 1)';
+          slider.style.transition = 'transform 0.26s cubic-bezier(0.25, 1, 0.5, 1)';
         }
         const offset = (currentPage - 1) * -100;
         slider.style.transform = 'translateX(' + offset + '%)';
       }
     }
 
-    // Scroll observer for real-time progress in Long Strip mode
+    function executePageTransition(direction) {
+      isTransitioning = true;
+      currentPage += direction;
+      updateSliderPosition(true);
+      updateSinglePageRenderWindow();
+      notifyPageChange();
+
+      if (transitionTimeout) clearTimeout(transitionTimeout);
+      transitionTimeout = setTimeout(() => {
+        onSliderTransitionEnd();
+      }, 290);
+    }
+
+    function onSliderTransitionEnd() {
+      if (transitionTimeout) {
+        clearTimeout(transitionTimeout);
+        transitionTimeout = null;
+      }
+      isTransitioning = false;
+
+      // Handle queued gestures sequentially without glitching
+      if (pendingNavDirection !== 0) {
+        const dir = pendingNavDirection > 0 ? 1 : -1;
+        pendingNavDirection = pendingNavDirection > 0 ? pendingNavDirection - 1 : pendingNavDirection + 1;
+        requestAnimationFrame(() => {
+          if (dir > 0 && currentPage < totalPages) {
+            executePageTransition(1);
+          } else if (dir < 0 && currentPage > 1) {
+            executePageTransition(-1);
+          }
+        });
+      }
+    }
+
+    // Scroll observer with Viewport Midpoint Detection for Long Strip mode
     function setupScrollObserver() {
       const container = document.getElementById('scroll-container');
       if (!container) return;
@@ -589,17 +654,19 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       container.addEventListener('scroll', () => {
         if (!isTicking) {
           window.requestAnimationFrame(() => {
-            const wrappers = document.querySelectorAll('.page-wrapper');
-            wrappers.forEach((wrap) => {
-              const rect = wrap.getBoundingClientRect();
-              if (rect.top >= 0 && rect.top <= window.innerHeight * 0.45) {
-                const pNum = parseInt(wrap.getAttribute('data-page'), 10);
+            const midY = window.innerHeight * 0.4;
+            const wrappers = document.querySelectorAll('.long-strip .page-wrapper');
+            for (let i = 0; i < wrappers.length; i++) {
+              const rect = wrappers[i].getBoundingClientRect();
+              if (rect.top <= midY && rect.bottom >= midY) {
+                const pNum = parseInt(wrappers[i].getAttribute('data-page'), 10);
                 if (pNum && pNum !== currentPage) {
                   currentPage = pNum;
                   notifyPageChange();
                 }
+                break;
               }
-            });
+            }
             isTicking = false;
           });
           isTicking = true;
@@ -607,7 +674,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       }, { passive: true });
     }
 
-    // Touch events with gesture state lock
+    // Touch events for HUD toggle and single-page swiping
     document.addEventListener('touchstart', (e) => {
       isUserTouching = true;
       touchStartX = e.touches[0].clientX;
@@ -633,7 +700,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOGGLE_OVERLAY' }));
         }
       } else if (Math.abs(diffX) > 36 && Math.abs(diffX) > Math.abs(diffY) && readingMode !== 'long_strip') {
-        // Horizontal swipe gesture with animation lock protection
+        // Horizontal swipe gesture in Single Page mode
         if (diffX < 0) {
           nextPage();
         } else {
@@ -656,66 +723,72 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
 
     function jumpToPage(p) {
       console.log('[WebView HTML] jumpToPage called with target page:', p);
-      if (currentPage !== p) {
-        currentPage = p;
-        if (readingMode === 'long_strip') {
-          // Do NOT interrupt manual finger scroll if the user is touching the screen
-          if (!isUserTouching) {
-            const target = document.getElementById('page-wrapper-' + currentPage);
-            if (target) {
-              target.scrollIntoView({ behavior: 'smooth' });
-              ensurePageRendered(currentPage);
-            }
-          }
-        } else {
-          updateSliderPosition(true);
-          updateSinglePageRenderWindow();
+      if (p < 1 || p > totalPages) return;
+      if (currentPage === p) return;
+
+      const isConsecutive = Math.abs(p - currentPage) === 1;
+      currentPage = p;
+
+      if (readingMode === 'long_strip') {
+        const target = document.getElementById('page-wrapper-' + currentPage);
+        if (target) {
+          target.scrollIntoView({ behavior: isConsecutive ? 'smooth' : 'auto', block: 'start' });
+          ensurePageRendered(currentPage);
         }
+      } else {
+        isTransitioning = false;
+        pendingNavDirection = 0;
+        if (transitionTimeout) clearTimeout(transitionTimeout);
+        updateSliderPosition(isConsecutive);
+        updateSinglePageRenderWindow();
       }
+      notifyPageChange();
     }
     window.jumpToPage = jumpToPage;
 
     function nextPage() {
-      if (isTransitioning) return; // Prevent animation restarts if user swipes too early
-      if (currentPage < totalPages) {
-        currentPage++;
-        if (readingMode === 'long_strip') {
-          const target = document.getElementById('page-wrapper-' + currentPage);
-          if (target) {
-            target.scrollIntoView({ behavior: 'smooth' });
-            ensurePageRendered(currentPage);
-          }
-        } else {
-          isTransitioning = true;
-          if (transitionTimeout) clearTimeout(transitionTimeout);
-          transitionTimeout = setTimeout(() => { isTransitioning = false; }, 360);
-          updateSliderPosition(true);
-          updateSinglePageRenderWindow();
+      if (readingMode === 'long_strip') {
+        if (currentPage < totalPages) {
+          jumpToPage(currentPage + 1);
         }
-        notifyPageChange();
+        return;
+      }
+
+      if (isTransitioning) {
+        const projectedPage = currentPage + (pendingNavDirection > 0 ? pendingNavDirection + 1 : 1);
+        if (projectedPage <= totalPages) {
+          pendingNavDirection = pendingNavDirection > 0 ? pendingNavDirection + 1 : 1;
+        }
+        return;
+      }
+
+      if (currentPage < totalPages) {
+        executePageTransition(1);
       }
     }
+    window.nextPage = nextPage;
 
     function prevPage() {
-      if (isTransitioning) return; // Prevent animation restarts if user swipes too early
-      if (currentPage > 1) {
-        currentPage--;
-        if (readingMode === 'long_strip') {
-          const target = document.getElementById('page-wrapper-' + currentPage);
-          if (target) {
-            target.scrollIntoView({ behavior: 'smooth' });
-            ensurePageRendered(currentPage);
-          }
-        } else {
-          isTransitioning = true;
-          if (transitionTimeout) clearTimeout(transitionTimeout);
-          transitionTimeout = setTimeout(() => { isTransitioning = false; }, 360);
-          updateSliderPosition(true);
-          updateSinglePageRenderWindow();
+      if (readingMode === 'long_strip') {
+        if (currentPage > 1) {
+          jumpToPage(currentPage - 1);
         }
-        notifyPageChange();
+        return;
+      }
+
+      if (isTransitioning) {
+        const projectedPage = currentPage + (pendingNavDirection < 0 ? pendingNavDirection - 1 : -1);
+        if (projectedPage >= 1) {
+          pendingNavDirection = pendingNavDirection < 0 ? pendingNavDirection - 1 : -1;
+        }
+        return;
+      }
+
+      if (currentPage > 1) {
+        executePageTransition(-1);
       }
     }
+    window.prevPage = prevPage;
 
     function notifyPageChange() {
       if (window.ReactNativeWebView) {
@@ -796,7 +869,6 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       } else if (data.type === 'TOGGLE_OVERLAY') {
         onToggleOverlay();
       } else if (data.type === 'PAGE_CHANGE') {
-        lastWebViewPageRef.current = data.page;
         onPageChange(data.page, data.totalPages);
       } else if (data.type === 'PAGE1_THUMBNAIL') {
         console.log('[PdfViewerCanvas] Received PAGE1_THUMBNAIL Data URL from WebView!');
@@ -834,7 +906,7 @@ export const PdfViewerCanvas: React.FC<PdfViewerCanvasProps> = ({
       />
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
