@@ -10,9 +10,11 @@ Use this skill when developing, refactoring, or adding features to the **ReadMe*
 
 ## Key Rules & Patterns
 
-### 1. PDF Loading & V8 Memory Injection
-- Always load PDF data in WebViews by injecting the Base64 string directly into `window.__PDF_BASE64_DATA__` via `injectedJavaScriptBeforeContentLoaded`.
-- Avoid sending large Base64 files through `postMessage` (Android WebView limits IPC to ~1MB).
+### 1. Zero-Heap Native File Loading & Page Virtualization
+- Never use `FileSystem.readAsStringAsync` to read entire PDFs as Base64 into React Native memory (causes `OutOfMemoryError` on 50MB+ files).
+- Pass `file:///` URIs directly to WebView with `baseUrl: 'file:///'` and load via native Chromium `ArrayBuffer` streaming.
+- Always virtualize page rendering via `IntersectionObserver` in long strip mode and a 3-page window in single page mode to protect GPU memory.
+- Guard against bidirectional echo loops when WebView reports page changes.
 
 ### 2. Live Dynamic Settings
 - When changing reader themes, margins, color inversion, or zoom, inject execution directly into the active WebView via:

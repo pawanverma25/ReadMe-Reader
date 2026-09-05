@@ -12,7 +12,7 @@
 3. **Always Verify Type Safety**: Run `npx tsc --noEmit` and ensure 0 errors before concluding any task.
 
 ## 🏛️ Architectural Commandments
-1. **Direct V8 PDF Injection**: Inject large Base64 PDF data directly into `window.__PDF_BASE64_DATA__` via `injectedJavaScriptBeforeContentLoaded` to bypass Android WebView's 1MB IPC limit.
+1. **Zero-Heap Native File Loading & Page Virtualization**: Never use `FileSystem.readAsStringAsync` to read entire PDFs as Base64 into React Native/Java memory (causes `OutOfMemoryError` on 50MB+ files). Pass `file:///` URIs directly to WebView with `baseUrl: 'file:///'` and use native `ArrayBuffer` streaming. Always virtualize page rendering via `IntersectionObserver` to keep memory footprint minimal.
 2. **0ms Dynamic Settings**: Apply reader settings in real-time via `webViewRef.current.injectJavaScript()` rather than triggering WebView reloads.
 3. **Native Biometrics**: Use `expo-local-authentication` for app lock. Never implement custom PIN inputs or custom auth stores.
 4. **Offline First**: All user data, books, and logs stay strictly on the local device (`AsyncStorage` & `FileSystem.documentDirectory`).

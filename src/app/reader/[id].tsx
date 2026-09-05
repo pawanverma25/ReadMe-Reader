@@ -20,7 +20,6 @@ export default function ReaderScreen() {
   const book = books.find((b) => b.id === id);
   const [currentPage, setCurrentPage] = useState<number>(book?.currentPage || 1);
   const [overlayVisible, setOverlayVisible] = useState<boolean>(true);
-  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -37,10 +36,10 @@ export default function ReaderScreen() {
     };
   }, [overlayVisible]);
 
-  // Read local PDF document into Base64 buffer for 100% reliable WebView canvas rendering
+  // Verify file existence without loading entire file into JVM string memory
   useEffect(() => {
     let isMounted = true;
-    async function loadPdfBase64() {
+    async function verifyPdfFile() {
       if (!book || !book.uri) {
         if (isMounted) setLoading(false);
         return;
@@ -50,26 +49,28 @@ export default function ReaderScreen() {
         setLoading(true);
         setLoadError(null);
 
-        console.log('[ReaderScreen] Starting FileSystem.readAsStringAsync for book:', book.title, 'URI:', book.uri);
-        const base64Data = await FileSystem.readAsStringAsync(book.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        console.log('[ReaderScreen] FileSystem read complete! Base64 length:', base64Data ? base64Data.length : 0);
+        const info = await FileSystem.getInfoAsync(book.uri);
+        if (!info.exists) {
+          if (isMounted) {
+            setLoadError('PDF document was moved or deleted from device storage.');
+          }
+          return;
+        }
 
         if (isMounted) {
-          setPdfBase64(base64Data);
+          setLoading(false);
         }
       } catch (err: any) {
-        console.error('[ReaderScreen] Error reading PDF file into Base64:', err);
+        console.error('[ReaderScreen] Error verifying PDF file:', err);
         if (isMounted) {
-          setLoadError(`Unable to load PDF file (${err.message || 'File error'}).`);
+          setLoadError(`Unable to open PDF file (${err.message || 'File error'}).`);
         }
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    loadPdfBase64();
+    verifyPdfFile();
     return () => {
       isMounted = false;
     };
@@ -114,7 +115,7 @@ export default function ReaderScreen() {
       ) : (
         <PdfViewerCanvas
           book={book}
-          pdfBase64={pdfBase64}
+          fileUri={book.uri}
           settings={settings}
           currentPage={currentPage}
           onPageChange={handlePageChange}

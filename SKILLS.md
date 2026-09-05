@@ -43,10 +43,13 @@ ReadMe is an offline-first, privacy-focused PDF & Comic Book Reader for Android 
 
 ## ⚡ Core Engineering Conventions
 
-### 1. Direct V8 Memory Injection for PDF Buffers
-- **The Issue**: Android Native WebView silently drops IPC `postMessage()` string payloads exceeding ~1 MB, causing large PDFs to hang or freeze.
-- **The Rule**: Always inject Base64 PDF data directly into V8 global window memory (`window.__PDF_BASE64_DATA__`) using `injectedJavaScriptBeforeContentLoaded`.
-- **Never** pass large PDF Base64 strings across postMessage queues.
+### 1. Zero-Heap Native File Loading & Page Virtualization (50MB+ PDF Architecture)
+- **The Issue**: Loading entire PDF files into React Native/Java memory as Base64 strings via `FileSystem.readAsStringAsync` causes immediate `java.lang.OutOfMemoryError` on Android for files > 40-50 MB (exceeding Android JVM's 256 MB heap growth limit). Rendering all canvases simultaneously on 500+ page books crashes the WebView GPU.
+- **The Rule**:
+  - Pass the local `file:///` URI directly to the WebView (`baseUrl: 'file:///'`). The WebView loads the file directly through native Chromium C++ `XMLHttpRequest` into an `ArrayBuffer`, keeping Java JVM heap allocation at **0 MB**.
+  - **Virtualized Page Rendering**: In continuous scroll (`long_strip`), only render page canvases near the viewport via `IntersectionObserver` and free distant canvases. In `single_page`, render only a 3-page sliding window (`currentPage ± 1`).
+  - **Bidirectional Echo Lock**: Never bounce `jumpToPage()` back to the WebView when a page change was initiated by the WebView's own user scroll/swipe gesture.
+  - **Gesture Lock**: Use an `isTransitioning` lock with `transitionend` and touch detection to prevent early gestures from interrupting or restarting page animations.
 
 ### 2. Zero-Latency Dynamic Settings Injection
 - **The Rule**: When the user adjusts reader settings (theme, invert colors, side margins, zoom), inject code directly via `webViewRef.current.injectJavaScript('window.applyDynamicSettings(...)')`.
