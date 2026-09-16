@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  PermissionsAndroid,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { AlertConfig, ThemedAlert } from '../../components/common/ThemedAlert';
+import { saveBookFilePermanently } from '../../utils/storage';
 import {
   BookPlus,
   FolderOpen,
@@ -44,24 +44,7 @@ export default function ExploreScreen() {
     try {
       setImporting(true);
 
-      // Trigger Native Android System Permission Dialog
-      if (Platform.OS === 'android') {
-        try {
-          await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-            {
-              title: 'Storage Access Permission Required',
-              message: 'ReadMe requires access to your device file storage to browse and import local PDF books.',
-              buttonPositive: 'Allow Access',
-              buttonNegative: 'Cancel',
-            }
-          );
-        } catch (pErr) {
-          console.warn('PermissionsAndroid error:', pErr);
-        }
-      }
-
-      // Launch system document picker intent with strict PDF filtering
+      // Launch native Storage Access Framework picker (0 permissions required)
       const res = await DocumentPicker.getDocumentAsync({
         type: 'application/pdf',
         copyToCacheDirectory: true,
@@ -72,10 +55,13 @@ export default function ExploreScreen() {
         const fileName = file.name || 'Imported PDF Book';
         const title = fileName.replace(/\.pdf$/i, '');
 
+        // Copy from temporary picker cache to persistent internal app storage
+        const permanentUri = await saveBookFilePermanently(file.uri, fileName);
+
         const newBook = await addBook({
           title,
           author: 'Local PDF Document',
-          uri: file.uri,
+          uri: permanentUri,
           fileSize: file.size || 2500000,
           totalPages: 1,
           coverColor: colors.primary,

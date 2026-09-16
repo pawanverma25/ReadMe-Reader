@@ -1,67 +1,63 @@
 {
-  "expo": {
-    "name": "ReadMe",
-    "slug": "readme",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "readme",
-    "userInterfaceStyle": "automatic",
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.readme.pdfreader"
-    },
-    "android": {
-      "package": "com.readme.pdfreader",
-      "versionCode": 1,
-      "adaptiveIcon": {
-        "backgroundColor": "#0E0D14",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "INTERNET"
-      ]
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "backgroundColor": "#0E0D14",
-          "imageWidth": 120
+    "expo": {
+        "name": "ReadMe",
+        "slug": "readme",
+        "version": "1.0.1",
+        "orientation": "portrait",
+        "icon": "./assets/images/icon.png",
+        "scheme": "readme",
+        "userInterfaceStyle": "automatic",
+        "ios": {
+            "supportsTablet": true,
+            "bundleIdentifier": "com.readme.pdfreader"
+        },
+        "android": {
+            "package": "com.readme.pdfreader",
+            "versionCode": 1,
+            "adaptiveIcon": {
+                "backgroundColor": "#0E0D14",
+                "foregroundImage": "./assets/images/android-icon-foreground.png",
+                "monochromeImage": "./assets/images/android-icon-monochrome.png"
+            },
+            "permissions": ["INTERNET"]
+        },
+        "web": {
+            "output": "static",
+            "favicon": "./assets/images/favicon.png"
+        },
+        "plugins": [
+            "expo-router",
+            [
+                "expo-splash-screen",
+                {
+                    "image": "./assets/images/splash-icon.png",
+                    "backgroundColor": "#0E0D14",
+                    "imageWidth": 120
+                }
+            ],
+            "expo-sharing",
+            "expo-document-picker",
+            "expo-image",
+            [
+                "expo-build-properties",
+                {
+                    "android": {
+                        "enableMinifyInReleaseBuilds": true,
+                        "enableShrinkResourcesInReleaseBuilds": true,
+                        "extraProguardRules": "-keep class com.swmansion.reanimated.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.facebook.react.** { *; }\n-keepclassmembers class * extends com.facebook.react.bridge.JavaScriptModule { *; }\n-keepclassmembers class * extends com.facebook.react.bridge.NativeModule { *; }\n-keep class com.reactnativecommunity.webview.** { *; }\n-keep class com.reactnativecommunity.asyncstorage.** { *; }\n-keep class expo.modules.** { *; }\n-dontwarn com.facebook.react.**\n-dontwarn expo.modules.**"
+                    }
+                }
+            ]
+        ],
+        "experiments": {
+            "typedRoutes": true,
+            "reactCompiler": true
+        },
+        "extra": {
+            "router": {},
+            "eas": {
+                "projectId": "3fb97fe0-c512-4e9c-92bc-bd9939aca864"
+            }
         }
-      ],
-      "expo-sharing",
-      "expo-document-picker",
-      "expo-image",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "enableMinifyInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true,
-            "extraProguardRules": "-keep class com.swmansion.reanimated.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.facebook.react.** { *; }\n-keepclassmembers class * extends com.facebook.react.bridge.JavaScriptModule { *; }\n-keepclassmembers class * extends com.facebook.react.bridge.NativeModule { *; }\n-keep class com.reactnativecommunity.webview.** { *; }\n-keep class com.reactnativecommunity.asyncstorage.** { *; }\n-keep class expo.modules.** { *; }\n-dontwarn com.facebook.react.**\n-dontwarn expo.modules.**"
-          }
-        }
-      ]
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    },
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "3fb97fe0-c512-4e9c-92bc-bd9939aca864"
-      }
     }
-  }
 }

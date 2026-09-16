@@ -213,3 +213,144 @@ export const clearAllData = async (): Promise<void> => {
     console.error('Failed to clear storage:', error);
   }
 };
+
+// --- Permanent PDF File Storage & Migration ---
+
+export const getBooksDirectory = (): string => {
+  const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+  return `${baseDir}books/`;
+};
+
+/**
+ * Copies a picked PDF file into persistent internal app storage (documentDirectory/books/).
+ * Files stored here survive Android app updates and OS cache sweeps indefinitely.
+ */
+export const saveBookFilePermanently = async (
+  sourceUri: string,
+  originalFileName: string
+): Promise<string> => {
+  const booksDir = getBooksDirectory();
+  const dirInfo = await FileSystem.getInfoAsync(booksDir);
+  if (!dirInfo.exists) {
+    await FileSystem.makeDirectoryAsync(booksDir, { intermediates: true });
+  }
+
+  const sanitizedName = originalFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const uniqueName = `${Date.now()}_${sanitizedName}`;
+  const targetUri = `${booksDir}${uniqueName}`;
+
+  await FileSystem.copyAsync({
+    from: sourceUri,
+    to: targetUri,
+  });
+
+  return targetUri;
+};
+
+/**
+ * Resolves a book's URI across updates and path shifts (e.g. /data/user/0/ vs /data/data/).
+ * Returns the verified file:/// URI if found, or null if the file no longer exists.
+ */
+export const resolveBookUri = async (uri: string): Promise<string | null> => {
+  if (!uri) return null;
+
+  try {
+    // 1. Direct check
+    const directInfo = await FileSystem.getInfoAsync(uri);
+    if (directInfo.exists) {
+      return uri;
+    }
+
+    // 2. Extract filename and check inside persistent books directory
+    const fileName = uri.split('/').pop();
+    if (fileName) {
+      const booksDir = getBooksDirectory();
+      const inBooksDir = `${booksDir}${fileName}`;
+      const booksDirInfo = await FileSystem.getInfoAsync(inBooksDir);
+      if (booksDirInfo.exists) {
+        return inBooksDir;
+      }
+    }
+
+    // 3. Check Android path alias shifts (/data/user/0/ <-> /data/data/)
+    if (uri.includes('/data/user/0/')) {
+      const altUri = uri.replace('/data/user/0/', '/data/data/');
+      const altInfo = await FileSystem.getInfoAsync(altUri);
+      if (altInfo.exists) return altUri;
+    } else if (uri.includes('/data/data/')) {
+      const altUri = uri.replace('/data/data/', '/data/user/0/');
+      const altInfo = await FileSystem.getInfoAsync(altUri);
+      if (altInfo.exists) return altUri;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('[resolveBookUri] Error resolving URI:', uri, error);
+    return null;
+  }
+};
+
+/**
+ * Rescues any books previously saved in cacheDirectory by copying them to documentDirectory.
+ * Runs on library load to protect user books from future cache purges.
+ */
+export const autoMigrateCachedBooks = async (
+  books: Book[]
+): Promise<{ books: Book[]; migratedCount: number }> => {
+  let migratedCount = 0;
+  const booksDir = getBooksDirectory();
+
+  const updatedBooks = await Promise.all(
+    books.map(async (book) => {
+      // If book URI is in cache, migrate to permanent documentDirectory if file still exists
+      if (book.uri && book.uri.includes('/cache/')) {
+        try {
+          const info = await FileSystem.getInfoAsync(book.uri);
+          if (info.exists) {
+            const dirInfo = await FileSystem.getInfoAsync(booksDir);
+            if (!dirInfo.exists) {
+              await FileSystem.makeDirectoryAsync(booksDir, { intermediates: true });
+            }
+            const fileName = book.uri.split('/').pop() || `${book.id}.pdf`;
+            const permanentUri = `${booksDir}${Date.now()}_${fileName}`;
+            await FileSystem.copyAsync({ from: book.uri, to: permanentUri });
+            migratedCount++;
+            return { ...book, uri: permanentUri };
+          }
+        } catch (e) {
+          console.warn('[autoMigrateCachedBooks] Failed to migrate book:', book.id, e);
+        }
+      }
+
+      // Check if URI needs path normalization
+      const resolved = await resolveBookUri(book.uri);
+      if (resolved && resolved !== book.uri) {
+        migratedCount++;
+        return { ...book, uri: resolved };
+      }
+
+      return book;
+    })
+  );
+
+  if (migratedCount > 0) {
+    await saveStoredBooks(updatedBooks);
+  }
+
+  return { books: updatedBooks, migratedCount };
+};
+
+/**
+ * Safely removes a book's physical file from persistent storage upon deletion.
+ */
+export const deleteBookFile = async (uri: string): Promise<void> => {
+  if (!uri) return;
+  try {
+    const resolved = await resolveBookUri(uri);
+    if (resolved) {
+      await FileSystem.deleteAsync(resolved, { idempotent: true });
+    }
+  } catch (error) {
+    console.warn('[deleteBookFile] Failed to delete book file:', uri, error);
+  }
+};
