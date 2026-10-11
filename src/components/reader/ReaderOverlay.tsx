@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -9,17 +10,26 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
+import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Book, ReaderSettings, ReaderTheme, ReadingMode } from '../../types';
+import { Book, Bookmark as BookmarkType, ReaderSettings, ReaderTheme, ReadingMode } from '../../types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useLibrary } from '../../contexts/LibraryContext';
 import {
   ArrowLeft,
   Bookmark,
   BookmarkCheck,
   ChevronLeft,
   ChevronRight,
+  Edit3,
   ListOrdered,
+  MessageSquare,
+  Minus,
+  Plus,
+  Share2,
   SlidersHorizontal,
+  Trash2,
   X,
 } from 'lucide-react-native';
 
@@ -49,12 +59,15 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
   onUpdateSettings,
 }) => {
   const { colors } = useTheme();
+  const { updateBookmarkNote, deleteBookmark } = useLibrary();
   const insets = useSafeAreaInsets();
   const [showJumpModal, setShowJumpModal] = useState(false);
   const [jumpPageInput, setJumpPageInput] = useState('');
   const [showBookmarksDrawer, setShowBookmarksDrawer] = useState(false);
   const [showReaderSettingsSheet, setShowReaderSettingsSheet] = useState(false);
   const [activeSheetTab, setActiveSheetTab] = useState<ReaderSheetTab>('reading_mode');
+  const [editingBookmark, setEditingBookmark] = useState<BookmarkType | null>(null);
+  const [bookmarkNoteInput, setBookmarkNoteInput] = useState('');
 
   if (!visible) return null;
 
@@ -68,6 +81,39 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
       setShowJumpModal(false);
       setJumpPageInput('');
     }
+  };
+
+  const handleOpenWith = async () => {
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert('Sharing Unavailable', 'File sharing is not supported on this device.');
+        return;
+      }
+      await Sharing.shareAsync(book.uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: `Open ${book.title} with...`,
+        UTI: 'com.adobe.pdf',
+      });
+    } catch (err: any) {
+      console.warn('[ReaderOverlay] Error opening with external app:', err);
+    }
+  };
+
+  const handleOpenCommentModal = (bm: BookmarkType) => {
+    setEditingBookmark(bm);
+    setBookmarkNoteInput(bm.note || '');
+  };
+
+  const handleSaveComment = async () => {
+    if (!editingBookmark) return;
+    await updateBookmarkNote(book.id, editingBookmark.id, bookmarkNoteInput.trim());
+    setEditingBookmark(null);
+    setBookmarkNoteInput('');
+  };
+
+  const handleDeleteBookmark = async (bmId: string) => {
+    await deleteBookmark(book.id, bmId);
   };
 
   const topPadding = insets.top > 0 ? insets.top : 12;
@@ -100,6 +146,15 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
         </View>
 
         <View style={styles.topActions}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={handleOpenWith}
+            activeOpacity={0.7}
+            accessibilityLabel="Open with or Share"
+          >
+            <Share2 size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.iconBtn} onPress={onToggleBookmark} activeOpacity={0.7}>
             {isBookmarked ? (
               <BookmarkCheck size={22} color={colors.primary} />
@@ -172,8 +227,10 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
       </View>
 
       {/* Jump To Page Dialog */}
-      <Modal visible={showJumpModal} transparent animationType="fade">
+      <Modal visible={showJumpModal} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowJumpModal(false)}>
         <View style={styles.modalOverlay}>
+          <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShowJumpModal(false)} />
           <View style={[styles.jumpModalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Jump to Page</Text>
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
@@ -213,8 +270,10 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
       </Modal>
 
       {/* Side Drawer Bookmarks Panel */}
-      <Modal visible={showBookmarksDrawer} transparent animationType="slide">
+      <Modal visible={showBookmarksDrawer} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowBookmarksDrawer(false)}>
         <View style={styles.drawerOverlay}>
+          <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShowBookmarksDrawer(false)} />
           <View style={[styles.bookmarksDrawer, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={[styles.drawerHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
@@ -225,7 +284,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.bookmarksListContent}>
+            <ScrollView contentContainerStyle={styles.bookmarksListContent} showsVerticalScrollIndicator={false}>
               {book.bookmarks.length === 0 ? (
                 <View style={styles.emptyBmBox}>
                   <Bookmark size={40} color={colors.textSecondary} style={{ opacity: 0.4 }} />
@@ -235,33 +294,69 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
                 </View>
               ) : (
                 book.bookmarks.map((bm) => (
-                  <TouchableOpacity
+                  <View
                     key={bm.id}
                     style={[
                       styles.bookmarkCard,
                       { backgroundColor: colors.surface, borderColor: colors.border },
                     ]}
-                    onPress={() => {
-                      onPageSelect(bm.page);
-                      setShowBookmarksDrawer(false);
-                    }}
-                    activeOpacity={0.7}
                   >
-                    <View style={[styles.bmBadge, { backgroundColor: colors.primaryContainer }]}>
-                      <Text style={[styles.bmBadgeText, { color: colors.primary }]}>
-                        Page {bm.page}
-                      </Text>
-                    </View>
+                    <TouchableOpacity
+                      style={styles.bmMainTouchable}
+                      onPress={() => {
+                        onPageSelect(bm.page);
+                        setShowBookmarksDrawer(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.bmBadge, { backgroundColor: colors.primaryContainer }]}>
+                        <Text style={[styles.bmBadgeText, { color: colors.primary }]}>
+                          Page {bm.page}
+                        </Text>
+                      </View>
 
-                    <View style={styles.bmInfo}>
-                      <Text style={[styles.bmTitleText, { color: colors.textPrimary }]}>
-                        {bm.title || `Bookmark Page ${bm.page}`}
-                      </Text>
-                      <Text style={[styles.bmDateText, { color: colors.textSecondary }]}>
-                        Saved on {new Date(bm.createdAt).toLocaleDateString()}
-                      </Text>
+                      <View style={styles.bmInfo}>
+                        <Text style={[styles.bmTitleText, { color: colors.textPrimary }]}>
+                          {bm.title || `Bookmark Page ${bm.page}`}
+                        </Text>
+                        <Text style={[styles.bmDateText, { color: colors.textSecondary }]}>
+                          Saved on {new Date(bm.createdAt).toLocaleDateString()}
+                        </Text>
+                        {Boolean(bm.note) && (
+                          <View style={[styles.bmNoteBox, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}>
+                            <MessageSquare size={13} color={colors.primary} style={{ marginTop: 2, marginRight: 6 }} />
+                            <Text style={[styles.bmNoteText, { color: colors.textPrimary }]}>
+                              {bm.note}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+
+                    <View style={styles.bmActionCol}>
+                      <TouchableOpacity
+                        style={[styles.bmActionBtn, { backgroundColor: colors.surfaceVariant }]}
+                        onPress={() => handleOpenCommentModal(bm)}
+                        activeOpacity={0.7}
+                        accessibilityLabel="Add or edit note"
+                      >
+                        {bm.note ? (
+                          <Edit3 size={15} color={colors.primary} />
+                        ) : (
+                          <MessageSquare size={15} color={colors.textSecondary} />
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.bmActionBtn, { backgroundColor: colors.surfaceVariant }]}
+                        onPress={() => handleDeleteBookmark(bm.id)}
+                        activeOpacity={0.7}
+                        accessibilityLabel="Delete bookmark"
+                      >
+                        <Trash2 size={15} color={colors.danger} />
+                      </TouchableOpacity>
                     </View>
-                  </TouchableOpacity>
+                  </View>
                 ))
               )}
             </ScrollView>
@@ -269,14 +364,72 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
         </View>
       </Modal>
 
+      {/* Edit Bookmark Note Modal */}
+      <Modal visible={Boolean(editingBookmark)} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setEditingBookmark(null)}>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={45} tint="dark" style={StyleSheet.absoluteFill} />
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setEditingBookmark(null)} />
+          <View style={[styles.commentModalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.commentModalHeader}>
+              <View style={styles.commentModalHeaderTitle}>
+                <MessageSquare size={18} color={colors.primary} />
+                <Text style={[styles.modalTitle, { color: colors.textPrimary, marginLeft: 8 }]}>
+                  Bookmark Note (Page {editingBookmark?.page})
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setEditingBookmark(null)}>
+                <X size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+              Add annotations, comments, or thoughts for this page.
+            </Text>
+
+            <TextInput
+              style={[
+                styles.commentInput,
+                { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.surface },
+              ]}
+              multiline
+              numberOfLines={4}
+              value={bookmarkNoteInput}
+              onChangeText={setBookmarkNoteInput}
+              placeholder="Write a note or comment..."
+              placeholderTextColor={colors.textSecondary}
+              autoFocus
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: colors.surfaceVariant }]}
+                onPress={() => setEditingBookmark(null)}
+              >
+                <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: colors.primary }]}
+                onPress={handleSaveComment}
+              >
+                <Text style={{ color: colors.onPrimary, fontWeight: '700' }}>Save Note</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* In-Reader Bottom Settings Sheet */}
-      <Modal visible={showReaderSettingsSheet} transparent animationType="slide" onRequestClose={() => setShowReaderSettingsSheet(false)}>
-        <TouchableOpacity
-          style={styles.sheetBackdropOverlay}
-          activeOpacity={1}
-          onPress={() => setShowReaderSettingsSheet(false)}
-        >
-          <TouchableOpacity activeOpacity={1} style={[styles.readerSettingsSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Modal visible={showReaderSettingsSheet} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowReaderSettingsSheet(false)}>
+        <View style={styles.sheetBackdropOverlay}>
+          <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowReaderSettingsSheet(false)}
+          />
+          <View style={[styles.readerSettingsSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {/* Sheet Header */}
             <View style={styles.sheetHeaderTitleRow}>
               <Text style={[styles.sheetHeaderTitle, { color: colors.textPrimary }]}>Reader Settings</Text>
@@ -360,23 +513,119 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
                     })}
                   </View>
 
-                  <Text style={[styles.sheetSectionTitle, { color: colors.primary, marginTop: 16 }]}>Side padding ({settings.sidePadding}%)</Text>
-                  <View style={styles.sliderButtonsRow}>
-                    {[0, 5, 10, 15, 20, 25].map((pad) => (
-                      <TouchableOpacity
-                        key={pad}
-                        style={[
-                          styles.padChip,
-                          { backgroundColor: colors.surface },
-                          settings.sidePadding === pad && { backgroundColor: colors.primary },
-                        ]}
-                        onPress={() => onUpdateSettings({ sidePadding: pad })}
-                      >
-                        <Text style={[styles.padChipText, { color: settings.sidePadding === pad ? colors.onPrimary : colors.textPrimary }]}>
-                          {pad}%
+                  {/* Mihon-Style Side Padding Slider Section */}
+                  <View style={styles.sidePaddingSection}>
+                    <View style={styles.sliderHeaderRow}>
+                      <Text style={[styles.sheetSectionTitle, { color: colors.primary, marginBottom: 0 }]}>
+                        Side padding
+                      </Text>
+                      <View style={[styles.sliderValueBadge, { backgroundColor: colors.primaryContainer }]}>
+                        <Text style={[styles.sliderValueBadgeText, { color: colors.primary }]}>
+                          {settings.sidePadding || 0}%
                         </Text>
+                      </View>
+                    </View>
+
+                    {/* Stepper + Slider Track */}
+                    <View style={styles.sliderStepperContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.stepperBtn,
+                          { backgroundColor: colors.surface, borderColor: colors.border },
+                          (settings.sidePadding || 0) <= 0 && { opacity: 0.35 },
+                        ]}
+                        onPress={() => {
+                          const current = settings.sidePadding || 0;
+                          const next = Math.max(0, current - 1);
+                          onUpdateSettings({ sidePadding: next });
+                        }}
+                        disabled={(settings.sidePadding || 0) <= 0}
+                      >
+                        <Minus size={16} color={colors.textPrimary} />
                       </TouchableOpacity>
-                    ))}
+
+                      <View style={[styles.sliderTrackContainer, { backgroundColor: colors.surfaceVariant }]}>
+                        <View
+                          style={[
+                            styles.sliderTrackFill,
+                            {
+                              width: `${Math.min(100, Math.round(((settings.sidePadding || 0) / 25) * 100))}%`,
+                              backgroundColor: colors.primary,
+                            },
+                          ]}
+                        />
+                        {[0, 5, 10, 15, 20, 25].map((val) => (
+                          <TouchableOpacity
+                            key={val}
+                            style={[styles.sliderTick, { left: `${(val / 25) * 100}%` }]}
+                            onPress={() => onUpdateSettings({ sidePadding: val })}
+                            activeOpacity={0.7}
+                          >
+                            <View
+                              style={[
+                                styles.sliderTickDot,
+                                (settings.sidePadding || 0) >= val && { backgroundColor: '#FFFFFF' },
+                              ]}
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.stepperBtn,
+                          { backgroundColor: colors.surface, borderColor: colors.border },
+                          (settings.sidePadding || 0) >= 25 && { opacity: 0.35 },
+                        ]}
+                        onPress={() => {
+                          const current = settings.sidePadding || 0;
+                          const next = Math.min(25, current + 1);
+                          onUpdateSettings({ sidePadding: next });
+                        }}
+                        disabled={(settings.sidePadding || 0) >= 25}
+                      >
+                        <Plus size={16} color={colors.textPrimary} />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Quick Preset Buttons */}
+                    <View style={styles.sliderButtonsRow}>
+                      {[0, 5, 10, 15, 20, 25].map((pad) => (
+                        <TouchableOpacity
+                          key={pad}
+                          style={[
+                            styles.padChip,
+                            { backgroundColor: colors.surface, borderColor: colors.border },
+                            (settings.sidePadding || 0) === pad && {
+                              backgroundColor: colors.primary,
+                              borderColor: colors.primary,
+                            },
+                          ]}
+                          onPress={() => onUpdateSettings({ sidePadding: pad })}
+                        >
+                          <Text
+                            style={[
+                              styles.padChipText,
+                              {
+                                color:
+                                  (settings.sidePadding || 0) === pad
+                                    ? colors.onPrimary
+                                    : colors.textPrimary,
+                                fontWeight: (settings.sidePadding || 0) === pad ? '700' : '500',
+                              },
+                            ]}
+                          >
+                            {pad}%
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={[styles.sliderHelpText, { color: colors.textSecondary }]}>
+                      {settings.readingMode === 'single_page_h'
+                        ? 'Note: Side padding applies only to Long strip & Paged Vertical modes.'
+                        : 'Adjusts vertical page margins (0% - 25%).'}
+                    </Text>
                   </View>
                 </View>
               )}
@@ -460,8 +709,8 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
             >
               <Text style={{ color: colors.onPrimary, fontWeight: '700', fontSize: 14 }}>Done</Text>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -534,7 +783,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -576,7 +825,7 @@ const styles = StyleSheet.create({
   // Bookmarks Drawer
   drawerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
   },
   bookmarksDrawer: {
@@ -613,22 +862,28 @@ const styles = StyleSheet.create({
   bookmarkCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    justifyContent: 'space-between',
+    padding: 12,
     borderRadius: 14,
     borderWidth: 1,
     marginBottom: 10,
   },
+  bmMainTouchable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
   bmBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   bmBadgeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   bmInfo: {
-    marginLeft: 14,
+    marginLeft: 12,
     flex: 1,
   },
   bmTitleText: {
@@ -637,11 +892,65 @@ const styles = StyleSheet.create({
   },
   bmDateText: {
     fontSize: 11,
-    marginTop: 3,
+    marginTop: 2,
   },
+  bmNoteBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  bmNoteText: {
+    fontSize: 12,
+    lineHeight: 16,
+    flex: 1,
+    fontStyle: 'italic',
+  },
+  bmActionCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 8,
+  },
+  bmActionBtn: {
+    padding: 7,
+    borderRadius: 8,
+  },
+  // Comment Modal
+  commentModalCard: {
+    width: '90%',
+    maxWidth: 380,
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+  },
+  commentModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  commentModalHeaderTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  commentInput: {
+    minHeight: 90,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    marginBottom: 18,
+    textAlignVertical: 'top',
+  },
+  // Settings Sheet
   sheetBackdropOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
@@ -700,18 +1009,84 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  // Mihon-Style Slider
+  sidePaddingSection: {
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  sliderHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sliderValueBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  sliderValueBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sliderStepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  stepperBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sliderTrackContainer: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  sliderTrackFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  sliderTick: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    marginLeft: -10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sliderTickDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
   sliderButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   padChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
   },
   padChipText: {
     fontSize: 11,
+  },
+  sliderHelpText: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 15,
   },
   settingRowSheet: {
     flexDirection: 'row',

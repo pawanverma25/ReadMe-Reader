@@ -8,9 +8,11 @@ import {
     FolderKanban,
     Heart,
     Play,
+    Share2,
     Trash2,
     X
 } from 'lucide-react-native';
+import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import {
     Modal,
@@ -88,6 +90,30 @@ export default function BookDetailsScreen() {
         await updateBookCategories(book.id, updatedCats);
     };
 
+    const handleOpenWith = async () => {
+        try {
+            const isAvailable = await Sharing.isAvailableAsync();
+            if (!isAvailable) {
+                setAlertConfig({
+                    visible: true,
+                    title: 'Sharing Unavailable',
+                    message: 'Sharing files is not supported on this device.',
+                    type: 'info',
+                    confirmText: 'OK',
+                    onConfirm: () => setAlertConfig((prev) => ({ ...prev, visible: false })),
+                });
+                return;
+            }
+            await Sharing.shareAsync(book.uri, {
+                mimeType: 'application/pdf',
+                dialogTitle: `Open ${book.title} with...`,
+                UTI: 'com.adobe.pdf',
+            });
+        } catch (err: any) {
+            console.warn('[BookDetailsScreen] Failed to share PDF:', err);
+        }
+    };
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
             {/* Top Header */}
@@ -99,6 +125,15 @@ export default function BookDetailsScreen() {
                     Book Details
                 </Text>
                 <View style={styles.headerRightActions}>
+                    <TouchableOpacity
+                        style={styles.headerBtn}
+                        onPress={handleOpenWith}
+                        activeOpacity={0.7}
+                        accessibilityLabel="Open with or Share"
+                    >
+                        <Share2 size={20} color={colors.textPrimary} />
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                         style={styles.headerBtn}
                         onPress={() => toggleFavorite(book.id)}

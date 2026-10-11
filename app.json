@@ -2,7 +2,7 @@
     "expo": {
         "name": "ReadMe",
         "slug": "readme",
-        "version": "1.0.1",
+        "version": "1.0.2",
         "orientation": "portrait",
         "icon": "./assets/images/icon.png",
         "scheme": "readme",
@@ -19,7 +19,17 @@
                 "foregroundImage": "./assets/images/android-icon-foreground.png",
                 "monochromeImage": "./assets/images/android-icon-monochrome.png"
             },
-            "permissions": ["INTERNET"]
+            "permissions": ["INTERNET"],
+            "intentFilters": [
+                {
+                    "action": "VIEW",
+                    "data": [
+                        { "mimeType": "application/pdf", "scheme": "content" },
+                        { "mimeType": "application/pdf", "scheme": "file" }
+                    ],
+                    "category": ["DEFAULT", "BROWSABLE"]
+                }
+            ]
         },
         "web": {
             "output": "static",
@@ -38,6 +48,7 @@
             "expo-sharing",
             "expo-document-picker",
             "expo-image",
+            "./plugins/withRemovePermissions.js",
             [
                 "expo-build-properties",
                 {

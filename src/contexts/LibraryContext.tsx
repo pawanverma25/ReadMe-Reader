@@ -33,6 +33,8 @@ interface LibraryContextType {
   updateBookCover: (bookId: string, coverUrl: string) => Promise<void>;
   updateBookUri: (bookId: string, newUri: string, newFileSize?: number) => Promise<void>;
   toggleBookmark: (bookId: string, page: number, title?: string) => Promise<void>;
+  updateBookmarkNote: (bookId: string, bookmarkId: string, note: string) => Promise<void>;
+  deleteBookmark: (bookId: string, bookmarkId: string) => Promise<void>;
   updateBookStatus: (bookId: string, status: StatusType) => Promise<void>;
   updateBookCategories: (bookId: string, categoryIds: string[]) => Promise<void>;
   toggleFavorite: (bookId: string) => Promise<void>;
@@ -164,6 +166,27 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await saveStoredBooks(updated);
   };
 
+  const updateBookmarkNote = async (bookId: string, bookmarkId: string, note: string) => {
+    const updated = books.map((b) => {
+      if (b.id !== bookId) return b;
+      const newBookmarks = b.bookmarks.map((bm) =>
+        bm.id === bookmarkId ? { ...bm, note } : bm
+      );
+      return { ...b, bookmarks: newBookmarks };
+    });
+    setBooks(updated);
+    await saveStoredBooks(updated);
+  };
+
+  const deleteBookmark = async (bookId: string, bookmarkId: string) => {
+    const updated = books.map((b) => {
+      if (b.id !== bookId) return b;
+      return { ...b, bookmarks: b.bookmarks.filter((bm) => bm.id !== bookmarkId) };
+    });
+    setBooks(updated);
+    await saveStoredBooks(updated);
+  };
+
   const updateBookStatus = async (bookId: string, status: StatusType) => {
     const updated = books.map((b) => (b.id === bookId ? { ...b, status } : b));
     setBooks(updated);
@@ -188,8 +211,8 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const deleteBook = async (bookId: string) => {
     const bookToDelete = books.find((b) => b.id === bookId);
-    if (bookToDelete?.uri) {
-      await deleteBookFile(bookToDelete.uri);
+    if (bookToDelete) {
+      await deleteBookFile(bookToDelete.uri, bookToDelete.coverUrl);
     }
     const updated = books.filter((b) => b.id !== bookId);
     setBooks(updated);
@@ -248,6 +271,8 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateBookCover,
         updateBookUri,
         toggleBookmark,
+        updateBookmarkNote,
+        deleteBookmark,
         updateBookStatus,
         updateBookCategories,
         toggleFavorite,

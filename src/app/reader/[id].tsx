@@ -17,7 +17,7 @@ import { useLibrary } from '../../contexts/LibraryContext';
 import { useReaderSettings } from '../../contexts/ReaderContext';
 import { PdfViewerCanvas, PdfViewerCanvasRef } from '../../components/reader/PdfViewerCanvas';
 import { ReaderOverlay } from '../../components/reader/ReaderOverlay';
-import { resolveBookUri, saveBookFilePermanently } from '../../utils/storage';
+import { resolveBookUri, saveBookFilePermanently, saveCoverImage } from '../../utils/storage';
 
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -165,9 +165,15 @@ export default function ReaderScreen() {
     debouncedSaveProgress(page, book.totalPages || totalPages);
   };
 
-  const handleCoverGenerated = (coverUrl: string) => {
-    if (!book.coverUrl) {
-      updateBookCover(book.id, coverUrl);
+  const handleCoverGenerated = async (coverUrl: string) => {
+    if (!coverUrl) return;
+    try {
+      const permanentCoverUri = await saveCoverImage(book.id, coverUrl);
+      if (permanentCoverUri) {
+        await updateBookCover(book.id, permanentCoverUri);
+      }
+    } catch (err) {
+      console.warn('[ReaderScreen] Failed to save generated cover:', err);
     }
   };
 

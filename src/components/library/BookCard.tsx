@@ -1,6 +1,7 @@
 import { Bookmark, CheckCircle2, FileText, Heart } from 'lucide-react-native';
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Book } from '../../types';
 
@@ -18,6 +19,11 @@ export const BookCard: React.FC<BookCardProps> = ({
     viewMode,
 }) => {
     const { colors } = useTheme();
+    const [imgError, setImgError] = React.useState(false);
+
+    React.useEffect(() => {
+        setImgError(false);
+    }, [book.coverUrl]);
 
     const progressPercent = Math.min(
         100,
@@ -25,7 +31,7 @@ export const BookCard: React.FC<BookCardProps> = ({
     );
 
     const coverBg = book.coverColor || colors.primary;
-    const hasCoverImage = Boolean(book.coverUrl && book.coverUrl.length > 20);
+    const hasCoverImage = Boolean(book.coverUrl && book.coverUrl.length > 20 && !imgError);
 
     if (viewMode === 'list') {
         return (
@@ -37,7 +43,13 @@ export const BookCard: React.FC<BookCardProps> = ({
             >
                 <View style={[styles.listCover, { backgroundColor: coverBg }]}>
                     {hasCoverImage ? (
-                        <Image source={{ uri: book.coverUrl }} style={styles.coverImage} resizeMode="cover" />
+                        <Image
+                            source={{ uri: book.coverUrl }}
+                            style={styles.coverImage}
+                            contentFit="cover"
+                            transition={200}
+                            onError={() => setImgError(true)}
+                        />
                     ) : (
                         <View style={styles.fallbackCoverBox}>
                             <FileText size={20} color="#FFFFFF" />
@@ -103,7 +115,13 @@ export const BookCard: React.FC<BookCardProps> = ({
         >
             <View style={[styles.gridCover, isCompact && styles.gridCoverCompact, { backgroundColor: coverBg }]}>
                 {hasCoverImage ? (
-                    <Image source={{ uri: book.coverUrl }} style={styles.coverImage} resizeMode="cover" />
+                    <Image
+                        source={{ uri: book.coverUrl }}
+                        style={styles.coverImage}
+                        contentFit="cover"
+                        transition={200}
+                        onError={() => setImgError(true)}
+                    />
                 ) : (
                     <View style={styles.bookCoverFallbackContainer}>
                         <View style={styles.bookCoverBadgeHeader}>
@@ -199,7 +217,11 @@ const styles = StyleSheet.create({
         height: 125,
     },
     coverImage: {
-        ...StyleSheet.absoluteFill,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         width: '100%',
         height: '100%',
     },

@@ -286,6 +286,7 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
     let volumeKeyNav = false;
     let isInitialJumpDone = false;
     let isCoverGenerated = false;
+    let currentSidePadding = 0;
 
     // Gesture & Animation queue for Single Page mode (glitch-free back-to-back swiping)
     let isTransitioning = false;
@@ -374,10 +375,77 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         if (loader) loader.style.display = 'none';
         renderView();
         notifyPageChange();
+
+        // If not starting on page 1, schedule offscreen thumbnail extraction once initial page renders
+        if (currentPage > 1) {
+          scheduleOffscreenThumbnail(pdfDoc);
+        }
       } catch (err) {
         console.error('[WebView HTML] PDF initialization error:', err);
         if (loader) loader.innerText = 'Unable to render PDF document. Error: ' + err.message;
       }
+    }
+
+    function extractThumbnailFromCanvas(sourceCanvas) {
+      if (isCoverGenerated || !sourceCanvas || !sourceCanvas.width) return;
+      try {
+        console.log('[WebView HTML] Extracting Page 1 thumbnail directly from canvas...');
+        const thumbCanvas = document.createElement('canvas');
+        const targetWidth = 180;
+        const scale = targetWidth / sourceCanvas.width;
+        thumbCanvas.width = targetWidth;
+        thumbCanvas.height = Math.max(Math.round(sourceCanvas.height * scale), 140);
+        const ctx = thumbCanvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+        ctx.drawImage(sourceCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+
+        const thumbData = thumbCanvas.toDataURL('image/jpeg', 0.82);
+        isCoverGenerated = true;
+        console.log('[WebView HTML] Extracted Page 1 thumbnail! Bytes:', thumbData.length);
+
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'PAGE1_THUMBNAIL',
+            coverUrl: thumbData
+          }));
+        }
+      } catch (err) {
+        console.warn('[WebView HTML] extractThumbnailFromCanvas error:', err);
+      }
+    }
+
+    function scheduleOffscreenThumbnail(doc) {
+      if (isCoverGenerated || !doc) return;
+      setTimeout(async () => {
+        if (isCoverGenerated || !doc) return;
+        try {
+          const page1 = await doc.getPage(1);
+          const unscaled = page1.getViewport({ scale: 1.0 });
+          const scale = Math.min(180 / (unscaled.width || 1), 0.4);
+          const viewport = page1.getViewport({ scale });
+
+          const thumbCanvas = document.createElement('canvas');
+          thumbCanvas.width = Math.max(Math.round(viewport.width), 100);
+          thumbCanvas.height = Math.max(Math.round(viewport.height), 140);
+          const ctx = thumbCanvas.getContext('2d');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+
+          await page1.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+          const thumbData = thumbCanvas.toDataURL('image/jpeg', 0.82);
+          isCoverGenerated = true;
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'PAGE1_THUMBNAIL',
+              coverUrl: thumbData
+            }));
+          }
+        } catch (e) {
+          console.warn('[WebView HTML] scheduleOffscreenThumbnail error:', e);
+        }
+      }, 700);
     }
 
     function renderView() {
@@ -580,18 +648,9 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
           wrapper.style.minHeight = canvas.clientHeight + 'px';
         }
 
-        // Generate Page 1 PNG cover thumbnail data URL for library cards
+        // Extract Page 1 cover thumbnail directly from rendered canvas without re-rendering
         if (pageNum === 1 && !isCoverGenerated) {
-          isCoverGenerated = true;
-          try {
-            const thumbUrl = canvas.toDataURL('image/png');
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'PAGE1_THUMBNAIL',
-              coverUrl: thumbUrl
-            }));
-          } catch (e) {
-            console.error('[WebView HTML] Thumbnail canvas.toDataURL error:', e);
-          }
+          extractThumbnailFromCanvas(canvas);
         }
       } catch (e) {
         console.error('[WebView HTML] Error rendering page ' + pageNum, e);
@@ -811,8 +870,21 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         root.style.setProperty('--bg-color', bgColor);
       }
 
-      if (s.sidePadding !== undefined) {
-        root.style.setProperty('--side-padding', s.sidePadding + '%');
+      if (s.readingMode && s.readingMode !== readingMode) {
+        readingMode = s.readingMode;
+        renderView();
+      }
+
+      if (s.sidePadding !== undefined || s.readingMode !== undefined) {
+        if (s.sidePadding !== undefined) {
+          currentSidePadding = s.sidePadding;
+        }
+        // Side padding should only apply to vertical margins in the pages (long_strip & single_page_v)
+        if (readingMode === 'single_page_h') {
+          root.style.setProperty('--side-padding', '0%');
+        } else {
+          root.style.setProperty('--side-padding', currentSidePadding + '%');
+        }
       }
 
       let filters = [];
@@ -820,11 +892,6 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       if (s.inverted) filters.push('invert(100%) hue-rotate(180deg)');
       const filterStr = filters.length > 0 ? filters.join(' ') : 'none';
       root.style.setProperty('--canvas-filter', filterStr);
-
-      if (s.readingMode && s.readingMode !== readingMode) {
-        readingMode = s.readingMode;
-        renderView();
-      }
     }
     window.applyDynamicSettings = applyDynamicSettings;
 

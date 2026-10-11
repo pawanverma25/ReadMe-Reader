@@ -341,16 +341,68 @@ export const autoMigrateCachedBooks = async (
 };
 
 /**
- * Safely removes a book's physical file from persistent storage upon deletion.
+ * Safely removes a book's physical file and cover thumbnail from persistent storage upon deletion.
  */
-export const deleteBookFile = async (uri: string): Promise<void> => {
-  if (!uri) return;
-  try {
-    const resolved = await resolveBookUri(uri);
-    if (resolved) {
-      await FileSystem.deleteAsync(resolved, { idempotent: true });
+export const deleteBookFile = async (uri?: string, coverUrl?: string): Promise<void> => {
+  if (uri) {
+    try {
+      const resolved = await resolveBookUri(uri);
+      if (resolved) {
+        await FileSystem.deleteAsync(resolved, { idempotent: true });
+      }
+    } catch (error) {
+      console.warn('[deleteBookFile] Failed to delete book file:', uri, error);
     }
-  } catch (error) {
-    console.warn('[deleteBookFile] Failed to delete book file:', uri, error);
+  }
+
+  if (coverUrl && coverUrl.startsWith('file://')) {
+    try {
+      const coverInfo = await FileSystem.getInfoAsync(coverUrl);
+      if (coverInfo.exists) {
+        await FileSystem.deleteAsync(coverUrl, { idempotent: true });
+      }
+    } catch (error) {
+      console.warn('[deleteBookFile] Failed to delete cover file:', coverUrl, error);
+    }
   }
 };
+
+// --- Cover Thumbnail Storage ---
+
+export const getCoversDirectory = (): string => {
+  const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+  return `${baseDir}covers/`;
+};
+
+/**
+ * Saves a generated base64 thumbnail image to persistent file storage (covers/{bookId}.jpg).
+ * This prevents multi-megabyte base64 strings from overflowing AsyncStorage's 2MB SQLite limit,
+ * while enabling hardware-accelerated image rendering and disk caching.
+ */
+export const saveCoverImage = async (bookId: string, base64DataUrl: string): Promise<string> => {
+  try {
+    if (!base64DataUrl || typeof base64DataUrl !== 'string') {
+      return '';
+    }
+
+    const coversDir = getCoversDirectory();
+    const dirInfo = await FileSystem.getInfoAsync(coversDir);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(coversDir, { intermediates: true });
+    }
+
+    const targetUri = `${coversDir}${bookId}.jpg`;
+    // Clean base64 header if present (e.g., "data:image/jpeg;base64,")
+    const cleanBase64 = base64DataUrl.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+
+    await FileSystem.writeAsStringAsync(targetUri, cleanBase64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    return targetUri;
+  } catch (error) {
+    console.warn('[saveCoverImage] Failed to save cover image to disk:', error);
+    return base64DataUrl; // Fallback to raw data URI if file write fails
+  }
+};
+
