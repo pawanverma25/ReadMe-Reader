@@ -123,9 +123,11 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateBookCover = async (bookId: string, coverUrl: string) => {
-    const updated = books.map((b) => (b.id === bookId ? { ...b, coverUrl } : b));
-    setBooks(updated);
-    await saveStoredBooks(updated);
+    setBooks((prev) => {
+      const updated = prev.map((b) => (b.id === bookId ? { ...b, coverUrl } : b));
+      saveStoredBooks(updated);
+      return updated;
+    });
   };
 
   const updateBookUri = async (bookId: string, newUri: string, newFileSize?: number) => {

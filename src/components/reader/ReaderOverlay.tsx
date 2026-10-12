@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
   Modal,
+  PanResponder,
   ScrollView,
   StyleSheet,
   Switch,
@@ -25,13 +26,85 @@ import {
   Edit3,
   ListOrdered,
   MessageSquare,
-  Minus,
-  Plus,
   Share2,
   SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-react-native';
+
+interface ContinuousSliderProps {
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  onChange: (val: number) => void;
+}
+
+const ContinuousSlider: React.FC<ContinuousSliderProps> = ({
+  value,
+  min = 0,
+  max = 25,
+  step = 1,
+  onChange,
+}) => {
+  const { colors } = useTheme();
+  const [trackWidth, setTrackWidth] = useState(0);
+
+  const handleTouch = (x: number) => {
+    if (trackWidth <= 0) return;
+    const clampedX = Math.max(0, Math.min(x, trackWidth));
+    const ratio = clampedX / trackWidth;
+    const raw = min + ratio * (max - min);
+    const stepped = Math.round(raw / step) * step;
+    const clamped = Math.max(min, Math.min(max, stepped));
+    onChange(clamped);
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        handleTouch(evt.nativeEvent.locationX);
+      },
+      onPanResponderMove: (evt) => {
+        handleTouch(evt.nativeEvent.locationX);
+      },
+    })
+  ).current;
+
+  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+
+  return (
+    <View
+      style={styles.sliderInteractiveContainer}
+      onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+      {...panResponder.panHandlers}
+    >
+      <View style={[styles.sliderTrackBg, { backgroundColor: colors.surfaceVariant }]}>
+        <View
+          style={[
+            styles.sliderTrackActive,
+            {
+              width: `${pct}%`,
+              backgroundColor: colors.primary,
+            },
+          ]}
+        />
+      </View>
+      <View
+        style={[
+          styles.sliderThumb,
+          {
+            left: `${pct}%`,
+            backgroundColor: colors.primary,
+            borderColor: colors.card,
+          },
+        ]}
+      />
+    </View>
+  );
+};
 
 interface ReaderOverlayProps {
   book: Book;
@@ -270,7 +343,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
       </Modal>
 
       {/* Side Drawer Bookmarks Panel */}
-      <Modal visible={showBookmarksDrawer} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowBookmarksDrawer(false)}>
+      <Modal visible={showBookmarksDrawer} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowBookmarksDrawer(false)}>
         <View style={styles.drawerOverlay}>
           <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShowBookmarksDrawer(false)} />
@@ -421,7 +494,7 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
       </Modal>
 
       {/* In-Reader Bottom Settings Sheet */}
-      <Modal visible={showReaderSettingsSheet} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowReaderSettingsSheet(false)}>
+      <Modal visible={showReaderSettingsSheet} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowReaderSettingsSheet(false)}>
         <View style={styles.sheetBackdropOverlay}>
           <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
           <TouchableOpacity
@@ -526,99 +599,15 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
                       </View>
                     </View>
 
-                    {/* Stepper + Slider Track */}
-                    <View style={styles.sliderStepperContainer}>
-                      <TouchableOpacity
-                        style={[
-                          styles.stepperBtn,
-                          { backgroundColor: colors.surface, borderColor: colors.border },
-                          (settings.sidePadding || 0) <= 0 && { opacity: 0.35 },
-                        ]}
-                        onPress={() => {
-                          const current = settings.sidePadding || 0;
-                          const next = Math.max(0, current - 1);
-                          onUpdateSettings({ sidePadding: next });
-                        }}
-                        disabled={(settings.sidePadding || 0) <= 0}
-                      >
-                        <Minus size={16} color={colors.textPrimary} />
-                      </TouchableOpacity>
-
-                      <View style={[styles.sliderTrackContainer, { backgroundColor: colors.surfaceVariant }]}>
-                        <View
-                          style={[
-                            styles.sliderTrackFill,
-                            {
-                              width: `${Math.min(100, Math.round(((settings.sidePadding || 0) / 25) * 100))}%`,
-                              backgroundColor: colors.primary,
-                            },
-                          ]}
-                        />
-                        {[0, 5, 10, 15, 20, 25].map((val) => (
-                          <TouchableOpacity
-                            key={val}
-                            style={[styles.sliderTick, { left: `${(val / 25) * 100}%` }]}
-                            onPress={() => onUpdateSettings({ sidePadding: val })}
-                            activeOpacity={0.7}
-                          >
-                            <View
-                              style={[
-                                styles.sliderTickDot,
-                                (settings.sidePadding || 0) >= val && { backgroundColor: '#FFFFFF' },
-                              ]}
-                            />
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.stepperBtn,
-                          { backgroundColor: colors.surface, borderColor: colors.border },
-                          (settings.sidePadding || 0) >= 25 && { opacity: 0.35 },
-                        ]}
-                        onPress={() => {
-                          const current = settings.sidePadding || 0;
-                          const next = Math.min(25, current + 1);
-                          onUpdateSettings({ sidePadding: next });
-                        }}
-                        disabled={(settings.sidePadding || 0) >= 25}
-                      >
-                        <Plus size={16} color={colors.textPrimary} />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Quick Preset Buttons */}
-                    <View style={styles.sliderButtonsRow}>
-                      {[0, 5, 10, 15, 20, 25].map((pad) => (
-                        <TouchableOpacity
-                          key={pad}
-                          style={[
-                            styles.padChip,
-                            { backgroundColor: colors.surface, borderColor: colors.border },
-                            (settings.sidePadding || 0) === pad && {
-                              backgroundColor: colors.primary,
-                              borderColor: colors.primary,
-                            },
-                          ]}
-                          onPress={() => onUpdateSettings({ sidePadding: pad })}
-                        >
-                          <Text
-                            style={[
-                              styles.padChipText,
-                              {
-                                color:
-                                  (settings.sidePadding || 0) === pad
-                                    ? colors.onPrimary
-                                    : colors.textPrimary,
-                                fontWeight: (settings.sidePadding || 0) === pad ? '700' : '500',
-                              },
-                            ]}
-                          >
-                            {pad}%
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                    {/* Continuous Mihon-Style Slider */}
+                    <View style={{ marginVertical: 14 }}>
+                      <ContinuousSlider
+                        value={settings.sidePadding || 0}
+                        min={0}
+                        max={25}
+                        step={1}
+                        onChange={(val) => onUpdateSettings({ sidePadding: val })}
+                      />
                     </View>
 
                     <Text style={[styles.sliderHelpText, { color: colors.textSecondary }]}>
@@ -1029,58 +1018,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  sliderStepperContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-  },
-  stepperBtn: {
-    width: 36,
+  sliderInteractiveContainer: {
     height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sliderTrackContainer: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
     position: 'relative',
-    justifyContent: 'center',
   },
-  sliderTrackFill: {
+  sliderTrackBg: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  sliderTrackActive: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 3,
   },
-  sliderTick: {
+  sliderThumb: {
     position: 'absolute',
-    width: 20,
-    height: 20,
-    marginLeft: -10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sliderTickDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  sliderButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  padChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  padChipText: {
-    fontSize: 11,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    marginLeft: -11,
+    borderWidth: 2.5,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
   },
   sliderHelpText: {
     fontSize: 11,

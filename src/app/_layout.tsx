@@ -7,6 +7,7 @@ import { LibraryProvider, useLibrary } from '../contexts/LibraryContext';
 import { ReaderProvider } from '../contexts/ReaderContext';
 import { SecurityProvider } from '../contexts/SecurityContext';
 import { saveBookFilePermanently } from '../utils/storage';
+import { ThumbnailGenerator } from '../components/common/ThumbnailGenerator';
 
 function RootLayoutNav() {
   const { colors, isDark } = useTheme();
@@ -94,7 +95,9 @@ function RootLayoutNav() {
         <Stack.Screen name="settings/statistics" />
         <Stack.Screen name="settings/security" />
         <Stack.Screen name="settings/advanced" />
+        <Stack.Screen name="+not-found" options={{ headerShown: false, animation: 'fade' }} />
       </Stack>
+      <ThumbnailGenerator />
     </>
   );
 }

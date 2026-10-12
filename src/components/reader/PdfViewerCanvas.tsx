@@ -148,9 +148,9 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
     .long-strip {
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      padding-top: 12px;
-      padding-bottom: 12px;
+      gap: 8px;
+      padding-top: 8px;
+      padding-bottom: 8px;
       padding-left: var(--side-padding);
       padding-right: var(--side-padding);
       width: 100%;
@@ -160,9 +160,11 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
 
     .long-strip .page-wrapper {
       width: 100%;
-      min-height: 500px;
-      padding: 2px 0;
+      min-height: 0;
+      padding: 0;
+      margin: 0;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       box-sizing: border-box;
@@ -296,8 +298,14 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
     let touchStartX = 0;
     let touchStartY = 0;
 
-    // Estimated page height based on page aspect ratio (stabilizes scroll container, 0 layout shifts)
-    let estimatedPageHeight = Math.round(window.innerWidth * 1.414);
+    // Estimated page height based on page aspect ratio and dynamic side padding
+    let pageAspectRatio = 1.414;
+    function getEstimatedPageHeight() {
+      const padPct = (readingMode === 'single_page_h') ? 0 : currentSidePadding;
+      const availWidth = window.innerWidth * (1 - (padPct * 2) / 100);
+      return Math.max(Math.round(availWidth * pageAspectRatio), 180);
+    }
+    let estimatedPageHeight = getEstimatedPageHeight();
 
     // Page rendering cache & virtualization maps
     const renderedPages = new Set();
@@ -488,15 +496,20 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         setupVirtualizedLongStrip();
         setupScrollObserver();
 
+        // Always render page 1 so cover thumbnail is extracted immediately
+        ensurePageRendered(1);
+
         if (!isInitialJumpDone) {
           isInitialJumpDone = true;
-          setTimeout(() => {
-            const target = document.getElementById('page-wrapper-' + currentPage);
-            if (target) {
-              target.scrollIntoView({ behavior: 'auto' });
-              ensurePageRendered(currentPage);
-            }
-          }, 150);
+          if (currentPage > 1) {
+            setTimeout(() => {
+              const target = document.getElementById('page-wrapper-' + currentPage);
+              if (target) {
+                target.scrollIntoView({ behavior: 'auto' });
+                ensurePageRendered(currentPage);
+              }
+            }, 150);
+          }
         }
       } else {
         container.style.overflowY = 'hidden';
@@ -528,6 +541,7 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         app.appendChild(viewport);
         updateSliderPosition(false);
         updateSinglePageRenderWindow();
+        ensurePageRendered(1);
       }
     }
 
@@ -594,11 +608,10 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
 
       const canvas = wrapper.querySelector('canvas');
       if (canvas) {
-        if (canvas.clientHeight > 0) {
-          wrapper.style.minHeight = canvas.clientHeight + 'px';
-        }
         canvas.remove();
       }
+
+      wrapper.style.minHeight = getEstimatedPageHeight() + 'px';
 
       const placeholder = wrapper.querySelector('.page-placeholder');
       if (placeholder) placeholder.style.display = 'flex';
@@ -633,19 +646,14 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
 
         // Calculate and stabilize uniform page aspect ratio from page 1
         if (pageNum === 1 && viewport.width > 0) {
-          const ratio = viewport.height / viewport.width;
-          estimatedPageHeight = Math.round(window.innerWidth * ratio);
-        }
-
-        const actualHeight = Math.round((window.innerWidth / (viewport.width || 1)) * viewport.height);
-        if (wrapper && readingMode === 'long_strip') {
-          wrapper.style.minHeight = (canvas.clientHeight || actualHeight || estimatedPageHeight) + 'px';
+          pageAspectRatio = viewport.height / viewport.width;
+          estimatedPageHeight = getEstimatedPageHeight();
         }
 
         await page.render({ canvasContext: context, viewport: viewport }).promise;
 
-        if (wrapper && readingMode === 'long_strip' && canvas.clientHeight > 0) {
-          wrapper.style.minHeight = canvas.clientHeight + 'px';
+        if (wrapper && readingMode === 'long_strip') {
+          wrapper.style.minHeight = 'auto';
         }
 
         // Extract Page 1 cover thumbnail directly from rendered canvas without re-rendering
@@ -885,6 +893,17 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         } else {
           root.style.setProperty('--side-padding', currentSidePadding + '%');
         }
+
+        const estH = getEstimatedPageHeight();
+        const unrenderedWrappers = document.querySelectorAll('.long-strip .page-wrapper');
+        unrenderedWrappers.forEach((w) => {
+          const p = parseInt(w.getAttribute('data-page'), 10);
+          if (!renderedPages.has(p)) {
+            w.style.minHeight = estH + 'px';
+          } else {
+            w.style.minHeight = 'auto';
+          }
+        });
       }
 
       let filters = [];
