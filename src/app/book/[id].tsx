@@ -345,7 +345,7 @@ export default function BookDetailsScreen() {
                 </View>
             </Modal>
 
-            {/* Custom Mihon Alert Dialog */}
+            {/* Custom Themed Alert Dialog */}
             <ThemedAlert {...alertConfig} />
         </SafeAreaView>
     );

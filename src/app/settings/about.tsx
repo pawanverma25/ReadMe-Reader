@@ -50,8 +50,8 @@ export default function AboutScreen() {
     },
     {
       icon: Sparkles,
-      title: 'Material 3 & Mihon Controls',
-      desc: 'Native Jetpack Compose sliders and reader controls inspired by Mihon.',
+      title: 'Material 3 Reader Controls',
+      desc: 'Native Jetpack Compose sliders and fluid reader navigation controls.',
     },
   ];
 

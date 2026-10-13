@@ -34,6 +34,18 @@ Use this skill when developing, refactoring, or adding features to the **ReadMe*
   const bottomHeight = 56 + insets.bottom;
   ```
 
-### 5. Verification
+### 5. Mode-Specific Dynamic Reader Padding
+- Maintain independent side padding properties (`sidePaddingLongStrip`, `sidePaddingPagedLtr`, `sidePaddingPagedVertical`).
+- Apply dynamically to `--side-padding` inside WebView while locking single-page containers to 100vw x 100vh.
+
+### 6. Resilient Multi-File Ingestion & Library Persistence
+- `LibraryContext.addBook` must always read current books directly from disk (`await getStoredBooks()`) before prepending and persisting.
+- Use functional state updates (`setBooks(prev => ...)`) for all book updates to prevent stale closure overwrites.
+
+### 7. Global Crash Diagnostics & Error Boundary
+- Catch unhandled errors via `ErrorUtils.setGlobalHandler` and wrap the root component tree in `<ErrorBoundary>`.
+- Use sequential write queue (`writeQueue`) to append errors to `readme_crash_logs.txt`.
+
+### 8. Verification
 - Always execute `npx tsc --noEmit` to ensure zero compilation errors.
 - Never run `eas build` on your own without explicit user approval.

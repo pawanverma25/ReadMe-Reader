@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import Slider from '@expo/ui/community/slider';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export interface MihonSliderProps {
+export interface NativeSliderProps {
   label?: string;
   value: number;
   min?: number;
@@ -14,7 +14,7 @@ export interface MihonSliderProps {
   onChange: (val: number) => void;
 }
 
-export const MihonSlider: React.FC<MihonSliderProps> = ({
+export const NativeSlider: React.FC<NativeSliderProps> = ({
   label,
   value,
   min = 0,
@@ -28,7 +28,7 @@ export const MihonSlider: React.FC<MihonSliderProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      {/* Header with Title and Mihon-style Pill Badge */}
+      {/* Header with Title and Value Badge */}
       {Boolean(label) && (
         <View style={styles.headerRow}>
           <Text style={[styles.labelTitle, { color: colors.textPrimary }]}>{label}</Text>
@@ -100,9 +100,8 @@ const styles = StyleSheet.create({
     height: 40,
   },
   helpText: {
-    fontSize: 11,
-    marginTop: 4,
-    textAlign: 'center',
-    lineHeight: 15,
+    fontSize: 12,
+    marginTop: 6,
+    lineHeight: 16,
   },
 });

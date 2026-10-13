@@ -216,7 +216,7 @@ export default function CategoryManagerScreen() {
         </View>
       </Modal>
 
-      {/* Custom Mihon Alert Dialog */}
+      {/* Custom Themed Alert Dialog */}
       <ThemedAlert {...alertConfig} />
     </SafeAreaView>
   );

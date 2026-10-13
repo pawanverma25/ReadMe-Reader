@@ -1,6 +1,6 @@
 # ReadMe - Premium Android PDF Book Reader
 
-**ReadMe** is a full-featured, offline-first Android PDF book reader built with **React Native**, **Expo SDK 57**, **TypeScript**, **Expo Router**, and **EAS**, heavily inspired by **Mihon**.
+**ReadMe** is a full-featured, offline-first Android PDF book reader built with **React Native**, **Expo SDK 57**, **TypeScript**, **Expo Router**, and **EAS**.
 
 ---
 
@@ -13,12 +13,12 @@
 - **Smart Sorting & Filtering**: Sort library entries by title, last read timestamp, progress %, or total page count.
 
 ### 📖 High-Performance Reader Engine
-- **Dual Reading Modes**:
+- **Reading Modes**:
   - **Long Strip (Continuous Vertical)**: Smooth continuous webtoon-style scrolling.
-  - **Single Page Swipe**: Interactive 0.35s animated slider supporting Horizontal LTR and Vertical page transitions.
+  - **Single Page Swipe**: Interactive animated slider supporting Horizontal LTR and Vertical page transitions.
 - **Real-Time Live Dynamic Settings**:
-  - Tapping options (Grayscale filter, Inverted Night Mode, Side padding 0% to 25%, Background theme) updates the active document **instantly in real-time (< 1ms)** behind a translucent bottom sheet.
-- **Gestures & Controls**: Center-tap gesture overlay HUD, scrubbable page indicator pill, page jump modal, bookmarking drawer, double-tap zoom, and hardware volume button page flipping.
+  - Tapping options (Grayscale filter, Inverted Night Mode, Independent side padding 0% to 25% per reading mode, Background theme) updates the active document **instantly in real-time (< 1ms)** behind a translucent bottom sheet.
+- **Gestures & Controls**: Center-tap gesture overlay HUD, scrubbable page indicator pill, page jump modal, bookmarking drawer, and GPU-accelerated smooth double-tap zoom.
 
 ### 🔒 System Security & Privacy
 - **Native Android System Biometrics & Device PIN**: Integrates directly with Android system authentication (`expo-local-authentication`) for Fingerprint, Face Unlock, or Device PIN/Pattern protection on launch and background resume.

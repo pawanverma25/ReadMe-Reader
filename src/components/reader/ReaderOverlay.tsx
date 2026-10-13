@@ -31,7 +31,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react-native';
-import { MihonSlider } from '../common/MihonSlider';
+import { NativeSlider } from '../common/NativeSlider';
 
 interface ReaderOverlayProps {
   book: Book;
@@ -513,9 +513,9 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
                     })}
                   </View>
 
-                  {/* Mihon-Style Side Padding Slider Section (Per Reading Mode) */}
+                  {/* Native Side Padding Slider Section (Per Reading Mode) */}
                   <View style={styles.sidePaddingSection}>
-                    <MihonSlider
+                    <NativeSlider
                       label={
                         settings.readingMode === 'long_strip'
                           ? 'Side padding (Long Strip)'
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  // Mihon-Style Slider
+  // Native Side Padding Slider
   sidePaddingSection: {
     marginTop: 12,
     marginBottom: 8,

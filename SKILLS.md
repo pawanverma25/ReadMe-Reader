@@ -67,7 +67,21 @@ ReadMe is an offline-first, privacy-focused PDF & Comic Book Reader for Android 
 - **App Lock**: Use `expo-local-authentication` (`LocalAuthentication.authenticateAsync`). Never build custom PIN screens or store plain-text passwords.
 - **Secure Screen**: Use `expo-screen-capture` (`preventScreenCaptureAsync`) to enforce Android `FLAG_SECURE`.
 
-### 5. Offline-First Data Storage
+### 5. Mode-Specific Dynamic Reader Padding
+- **The Rule**: Each reading mode maintains independent side margin configuration (`sidePaddingLongStrip`, `sidePaddingPagedLtr`, `sidePaddingPagedVertical`).
+- Settings injection translates padding per active mode to `--side-padding` inside WebView, preserving strict 100vw x 100vh bounds for single-page containment.
+
+### 6. Resilient Library Persistence & Multi-File Ingestion
+- **The Rule**: Never rely on in-memory state closures when adding or migrating books.
+- `LibraryContext.addBook` must always read current books directly from disk (`await getStoredBooks()`) before prepending and persisting.
+- All mutations must use functional state updates (`setBooks(prev => ...)`).
+- File import deduplicates by persistent file URI, not generic fallback titles.
+
+### 7. Local Crash Diagnostics & Error Boundary
+- Hook unhandled exceptions via `ErrorUtils.setGlobalHandler` and wrap the root component tree in `<ErrorBoundary>`.
+- Use a sequential write queue (`writeQueue`) to append errors to `readme_crash_logs.txt` without race conditions or file corruptions.
+
+### 8. Offline-First Data Storage
 - Store metadata (books, categories, bookmarks, timestamps) in `@react-native-async-storage/async-storage`.
 - Store document files exclusively in `FileSystem.documentDirectory`.
 - No network requests or telemetry SDKs allowed.

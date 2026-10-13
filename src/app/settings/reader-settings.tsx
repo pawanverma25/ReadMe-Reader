@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useReaderSettings } from '../../contexts/ReaderContext';
 import { ArrowLeft, RotateCcw } from 'lucide-react-native';
-import { MihonSlider } from '../../components/common/MihonSlider';
+import { NativeSlider } from '../../components/common/NativeSlider';
 import { ReadingMode } from '../../types';
 
 export default function ReaderSettingsScreen() {
@@ -103,9 +103,9 @@ export default function ReaderSettingsScreen() {
           Layout & Spacing
         </Text>
 
-        {/* Mihon-Style Side Padding Slider (Mode Specific) */}
+        {/* Native Side Padding Slider (Mode Specific) */}
         <View style={[styles.sliderBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <MihonSlider
+          <NativeSlider
             label={
               settings.readingMode === 'long_strip'
                 ? 'Side padding (Long Strip)'
