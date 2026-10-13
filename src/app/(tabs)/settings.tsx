@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   BookOpen,
@@ -22,6 +23,9 @@ import {
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+
+  const appVersion = Constants.expoConfig?.version || '1.1.0';
+  const buildNumber = Constants.expoConfig?.android?.versionCode ?? '1';
 
   const settingsItems = [
     {
@@ -76,8 +80,9 @@ export default function SettingsScreen() {
     {
       id: 'about',
       title: 'About',
-      subtitle: 'ReadMe Version 1.0.0',
+      subtitle: `ReadMe v${appVersion} (Build ${buildNumber})`,
       icon: Info,
+      route: '/settings/about',
     },
   ];
 

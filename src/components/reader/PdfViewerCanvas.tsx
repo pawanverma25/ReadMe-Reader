@@ -95,10 +95,12 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       settings.readerTheme,
       settings.readingMode,
       settings.sidePadding,
+      settings.sidePaddingLongStrip,
+      settings.sidePaddingPagedLtr,
+      settings.sidePaddingPagedVertical,
       settings.grayscale,
       settings.inverted,
-      settings.cropBorders,
-      settings.volumeKeyNavigation,
+      settings.doubleTapToZoom,
     ]);
 
   // Construct static base HTML string ONCE so WebView source prop NEVER changes
@@ -180,29 +182,63 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       display: flex;
       justify-content: center;
       align-items: center;
-      padding-left: var(--side-padding);
-      padding-right: var(--side-padding);
+      padding: 0;
+      margin: 0;
       box-sizing: border-box;
     }
 
     .single-page-slider {
       display: flex;
       flex-direction: row;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
       transition: transform 0.32s cubic-bezier(0.25, 1, 0.5, 1);
       will-change: transform;
     }
 
+    .single-page-slider.vertical {
+      flex-direction: column;
+    }
+
     .single-page-viewport .page-wrapper {
-      min-width: 100%;
-      width: 100%;
+      width: 100vw;
+      min-width: 100vw;
+      max-width: 100vw;
       height: 100vh;
+      min-height: 100vh;
+      max-height: 100vh;
+      flex-shrink: 0;
+      flex-grow: 0;
+      overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
       padding: 6px;
+      padding-left: var(--side-padding);
+      padding-right: var(--side-padding);
       box-sizing: border-box;
+    }
+
+    .single-page-slider:not(.vertical) .page-wrapper {
+      flex-basis: 100vw;
+    }
+
+    .single-page-slider.vertical .page-wrapper {
+      flex-basis: 100vh;
+    }
+
+    #app {
+      transition: transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1);
+      will-change: transform;
+      transform-origin: center center;
+      transform: translateZ(0);
+      backface-visibility: hidden;
+      transform-style: preserve-3d;
+    }
+
+    .page-wrapper {
+      transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1);
+      will-change: transform;
     }
 
     canvas {
@@ -215,7 +251,8 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       box-shadow: 0 4px 16px rgba(0,0,0,0.5);
       border-radius: 4px;
       filter: var(--canvas-filter);
-      transition: filter 0.2s ease;
+      transition: filter 0.2s ease, transform 0.25s ease;
+      will-change: transform;
     }
 
     .page-placeholder {
@@ -517,7 +554,7 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         viewport.className = 'single-page-viewport';
 
         const slider = document.createElement('div');
-        slider.className = 'single-page-slider';
+        slider.className = readingMode === 'single_page_v' ? 'single-page-slider vertical' : 'single-page-slider';
         slider.id = 'page-slider';
 
         for (let i = 1; i <= totalPages; i++) {
@@ -674,7 +711,11 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
           slider.style.transition = 'transform 0.26s cubic-bezier(0.25, 1, 0.5, 1)';
         }
         const offset = (currentPage - 1) * -100;
-        slider.style.transform = 'translateX(' + offset + '%)';
+        if (readingMode === 'single_page_v') {
+          slider.style.transform = 'translateY(' + offset + 'vh)';
+        } else {
+          slider.style.transform = 'translateX(' + offset + 'vw)';
+        }
       }
     }
 
@@ -741,7 +782,30 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       }, { passive: true });
     }
 
-    // Touch events for HUD toggle and single-page swiping
+    let lastTapTimestamp = 0;
+    let lastTapX = 0;
+    let lastTapY = 0;
+    let singleTapTimeout = null;
+    let isZoomedIn = false;
+    let doubleTapToZoomEnabled = true;
+
+    function handleDoubleTapZoom(tapX, tapY) {
+      const app = document.getElementById('app');
+      if (!app) return;
+
+      if (isZoomedIn) {
+        app.style.transform = 'scale(1) translateZ(0)';
+        isZoomedIn = false;
+      } else {
+        const originX = Math.round((tapX / window.innerWidth) * 100);
+        const originY = Math.round((tapY / window.innerHeight) * 100);
+        app.style.transformOrigin = originX + '% ' + originY + '%';
+        app.style.transform = 'scale(2.2) translateZ(0)';
+        isZoomedIn = true;
+      }
+    }
+
+    // Touch events for HUD toggle, double-tap zoom, and single-page swiping
     document.addEventListener('touchstart', (e) => {
       isUserTouching = true;
       touchStartX = e.touches[0].clientX;
@@ -756,17 +820,59 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
 
       setTimeout(() => { isUserTouching = false; }, 150);
 
-      // Tap detection for overlay toggle or tap navigation
+      // Tap detection for overlay toggle, double tap zoom, or tap navigation
       if (Math.abs(diffX) < 16 && Math.abs(diffY) < 16) {
-        const screenWidth = window.innerWidth;
-        if (touchStartX < screenWidth * 0.25) {
-          if (readingMode !== 'long_strip') prevPage();
-        } else if (touchStartX > screenWidth * 0.75) {
-          if (readingMode !== 'long_strip') nextPage();
-        } else {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOGGLE_OVERLAY' }));
+        const now = Date.now();
+        const timeSinceLastTap = now - lastTapTimestamp;
+        const distFromLastTap = Math.hypot(touchEndX - lastTapX, touchEndY - lastTapY);
+
+        if (doubleTapToZoomEnabled && timeSinceLastTap < 320 && distFromLastTap < 35) {
+          // Double-tap detected!
+          if (singleTapTimeout) {
+            clearTimeout(singleTapTimeout);
+            singleTapTimeout = null;
+          }
+          lastTapTimestamp = 0;
+          handleDoubleTapZoom(touchEndX, touchEndY);
+          return;
         }
-      } else if (Math.abs(diffX) > 36 && Math.abs(diffX) > Math.abs(diffY) && readingMode !== 'long_strip') {
+
+        lastTapTimestamp = now;
+        lastTapX = touchEndX;
+        lastTapY = touchEndY;
+
+        // Debounce single tap so double tap does not accidentally trigger HUD overlay
+        if (singleTapTimeout) clearTimeout(singleTapTimeout);
+        singleTapTimeout = setTimeout(() => {
+          singleTapTimeout = null;
+          if (isZoomedIn) {
+            // Tapping while zoomed resets zoom
+            handleDoubleTapZoom(touchEndX, touchEndY);
+            return;
+          }
+          const screenWidth = window.innerWidth;
+          if (touchStartX < screenWidth * 0.25) {
+            if (readingMode !== 'long_strip') prevPage();
+          } else if (touchStartX > screenWidth * 0.75) {
+            if (readingMode !== 'long_strip') nextPage();
+          } else {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOGGLE_OVERLAY' }));
+          }
+        }, 220);
+      } else if (readingMode === 'single_page_v' && Math.abs(diffY) > 36 && Math.abs(diffY) > Math.abs(diffX)) {
+        if (isZoomedIn) {
+          handleDoubleTapZoom(touchEndX, touchEndY);
+        }
+        // Vertical swipe gesture in Single Page Vertical mode
+        if (diffY < 0) {
+          nextPage();
+        } else {
+          prevPage();
+        }
+      } else if (readingMode !== 'long_strip' && Math.abs(diffX) > 36 && Math.abs(diffX) > Math.abs(diffY)) {
+        if (isZoomedIn) {
+          handleDoubleTapZoom(touchEndX, touchEndY);
+        }
         // Horizontal swipe gesture in Single Page mode
         if (diffX < 0) {
           nextPage();
@@ -775,18 +881,6 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         }
       }
     }, { passive: true });
-
-    // Hardware Volume Keys & Keyboard Navigation
-    window.addEventListener('keydown', (e) => {
-      if (!volumeKeyNav) return;
-      if (e.key === 'VolumeUp' || e.keyCode === 24 || e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-        prevPage();
-        e.preventDefault();
-      } else if (e.key === 'VolumeDown' || e.keyCode === 25 || e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-        nextPage();
-        e.preventDefault();
-      }
-    });
 
     function jumpToPage(p) {
       console.log('[WebView HTML] jumpToPage called with target page:', p);
@@ -883,34 +977,54 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         renderView();
       }
 
-      if (s.sidePadding !== undefined || s.readingMode !== undefined) {
-        if (s.sidePadding !== undefined) {
-          currentSidePadding = s.sidePadding;
+      // Determine the specific side padding for the active reading mode
+      let effectiveSidePadding = currentSidePadding;
+      if (readingMode === 'long_strip') {
+        if (s.sidePaddingLongStrip !== undefined) {
+          effectiveSidePadding = s.sidePaddingLongStrip;
+        } else if (s.sidePadding !== undefined) {
+          effectiveSidePadding = s.sidePadding;
         }
-        // Side padding should only apply to vertical margins in the pages (long_strip & single_page_v)
-        if (readingMode === 'single_page_h') {
-          root.style.setProperty('--side-padding', '0%');
+      } else if (readingMode === 'single_page_h') {
+        if (s.sidePaddingPagedLtr !== undefined) {
+          effectiveSidePadding = s.sidePaddingPagedLtr;
         } else {
-          root.style.setProperty('--side-padding', currentSidePadding + '%');
+          effectiveSidePadding = 0;
         }
-
-        const estH = getEstimatedPageHeight();
-        const unrenderedWrappers = document.querySelectorAll('.long-strip .page-wrapper');
-        unrenderedWrappers.forEach((w) => {
-          const p = parseInt(w.getAttribute('data-page'), 10);
-          if (!renderedPages.has(p)) {
-            w.style.minHeight = estH + 'px';
-          } else {
-            w.style.minHeight = 'auto';
-          }
-        });
+      } else if (readingMode === 'single_page_v') {
+        if (s.sidePaddingPagedVertical !== undefined) {
+          effectiveSidePadding = s.sidePaddingPagedVertical;
+        } else if (s.sidePadding !== undefined) {
+          effectiveSidePadding = s.sidePadding;
+        }
       }
+
+      currentSidePadding = effectiveSidePadding;
+      root.style.setProperty('--side-padding', currentSidePadding + '%');
+
+      const estH = getEstimatedPageHeight();
+      const unrenderedWrappers = document.querySelectorAll('.long-strip .page-wrapper');
+      unrenderedWrappers.forEach((w) => {
+        const p = parseInt(w.getAttribute('data-page'), 10);
+        if (!renderedPages.has(p)) {
+          w.style.minHeight = estH + 'px';
+        } else {
+          w.style.minHeight = 'auto';
+        }
+      });
 
       let filters = [];
       if (s.grayscale) filters.push('grayscale(100%)');
       if (s.inverted) filters.push('invert(100%) hue-rotate(180deg)');
       const filterStr = filters.length > 0 ? filters.join(' ') : 'none';
       root.style.setProperty('--canvas-filter', filterStr);
+
+      if (s.doubleTapToZoom !== undefined) {
+        doubleTapToZoomEnabled = s.doubleTapToZoom;
+        if (!doubleTapToZoomEnabled && isZoomedIn) {
+          handleDoubleTapZoom(0, 0);
+        }
+      }
     }
     window.applyDynamicSettings = applyDynamicSettings;
 

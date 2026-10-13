@@ -31,80 +31,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react-native';
-
-interface ContinuousSliderProps {
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  onChange: (val: number) => void;
-}
-
-const ContinuousSlider: React.FC<ContinuousSliderProps> = ({
-  value,
-  min = 0,
-  max = 25,
-  step = 1,
-  onChange,
-}) => {
-  const { colors } = useTheme();
-  const [trackWidth, setTrackWidth] = useState(0);
-
-  const handleTouch = (x: number) => {
-    if (trackWidth <= 0) return;
-    const clampedX = Math.max(0, Math.min(x, trackWidth));
-    const ratio = clampedX / trackWidth;
-    const raw = min + ratio * (max - min);
-    const stepped = Math.round(raw / step) * step;
-    const clamped = Math.max(min, Math.min(max, stepped));
-    onChange(clamped);
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        handleTouch(evt.nativeEvent.locationX);
-      },
-      onPanResponderMove: (evt) => {
-        handleTouch(evt.nativeEvent.locationX);
-      },
-    })
-  ).current;
-
-  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
-
-  return (
-    <View
-      style={styles.sliderInteractiveContainer}
-      onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
-      {...panResponder.panHandlers}
-    >
-      <View style={[styles.sliderTrackBg, { backgroundColor: colors.surfaceVariant }]}>
-        <View
-          style={[
-            styles.sliderTrackActive,
-            {
-              width: `${pct}%`,
-              backgroundColor: colors.primary,
-            },
-          ]}
-        />
-      </View>
-      <View
-        style={[
-          styles.sliderThumb,
-          {
-            left: `${pct}%`,
-            backgroundColor: colors.primary,
-            borderColor: colors.card,
-          },
-        ]}
-      />
-    </View>
-  );
-};
+import { MihonSlider } from '../common/MihonSlider';
 
 interface ReaderOverlayProps {
   book: Book;
@@ -586,35 +513,37 @@ export const ReaderOverlay: React.FC<ReaderOverlayProps> = ({
                     })}
                   </View>
 
-                  {/* Mihon-Style Side Padding Slider Section */}
+                  {/* Mihon-Style Side Padding Slider Section (Per Reading Mode) */}
                   <View style={styles.sidePaddingSection}>
-                    <View style={styles.sliderHeaderRow}>
-                      <Text style={[styles.sheetSectionTitle, { color: colors.primary, marginBottom: 0 }]}>
-                        Side padding
-                      </Text>
-                      <View style={[styles.sliderValueBadge, { backgroundColor: colors.primaryContainer }]}>
-                        <Text style={[styles.sliderValueBadgeText, { color: colors.primary }]}>
-                          {settings.sidePadding || 0}%
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Continuous Mihon-Style Slider */}
-                    <View style={{ marginVertical: 14 }}>
-                      <ContinuousSlider
-                        value={settings.sidePadding || 0}
-                        min={0}
-                        max={25}
-                        step={1}
-                        onChange={(val) => onUpdateSettings({ sidePadding: val })}
-                      />
-                    </View>
-
-                    <Text style={[styles.sliderHelpText, { color: colors.textSecondary }]}>
-                      {settings.readingMode === 'single_page_h'
-                        ? 'Note: Side padding applies only to Long strip & Paged Vertical modes.'
-                        : 'Adjusts vertical page margins (0% - 25%).'}
-                    </Text>
+                    <MihonSlider
+                      label={
+                        settings.readingMode === 'long_strip'
+                          ? 'Side padding (Long Strip)'
+                          : settings.readingMode === 'single_page_v'
+                          ? 'Side padding (Vertical)'
+                          : 'Side padding (Paged LTR)'
+                      }
+                      value={
+                        settings.readingMode === 'long_strip'
+                          ? (settings.sidePaddingLongStrip ?? settings.sidePadding ?? 0)
+                          : settings.readingMode === 'single_page_v'
+                          ? (settings.sidePaddingPagedVertical ?? settings.sidePadding ?? 0)
+                          : (settings.sidePaddingPagedLtr ?? 0)
+                      }
+                      min={0}
+                      max={25}
+                      step={1}
+                      helpText="Adjusts side margins specifically for this reading mode (0% - 25%)."
+                      onChange={(val) => {
+                        if (settings.readingMode === 'long_strip') {
+                          onUpdateSettings({ sidePaddingLongStrip: val, sidePadding: val });
+                        } else if (settings.readingMode === 'single_page_v') {
+                          onUpdateSettings({ sidePaddingPagedVertical: val });
+                        } else {
+                          onUpdateSettings({ sidePaddingPagedLtr: val });
+                        }
+                      }}
+                    />
                   </View>
                 </View>
               )}
@@ -1008,49 +937,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
-  },
-  sliderValueBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  sliderValueBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  sliderInteractiveContainer: {
-    height: 36,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  sliderTrackBg: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  sliderTrackActive: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  sliderThumb: {
-    position: 'absolute',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    marginLeft: -11,
-    borderWidth: 2.5,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-  },
-  sliderHelpText: {
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 15,
   },
   settingRowSheet: {
     flexDirection: 'row',

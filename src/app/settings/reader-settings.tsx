@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,12 +12,35 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useReaderSettings } from '../../contexts/ReaderContext';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, RotateCcw } from 'lucide-react-native';
+import { MihonSlider } from '../../components/common/MihonSlider';
+import { ReadingMode } from '../../types';
 
 export default function ReaderSettingsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { settings, updateSettings } = useReaderSettings();
+  const { settings, updateSettings, resetSettings } = useReaderSettings();
+
+  const handleReset = () => {
+    Alert.alert(
+      'Reset Reader Settings',
+      'Are you sure you want to restore default reader settings?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => resetSettings(),
+        },
+      ]
+    );
+  };
+
+  const readingModes: { id: ReadingMode; label: string; desc: string }[] = [
+    { id: 'long_strip', label: 'Long strip', desc: 'Continuous vertical webtoon strip' },
+    { id: 'single_page_h', label: 'Paged (LTR)', desc: 'Horizontal single page slider' },
+    { id: 'single_page_v', label: 'Paged (Vertical)', desc: 'Vertical single page slider' },
+  ];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
@@ -28,82 +52,96 @@ export default function ReaderSettingsScreen() {
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Reader Settings</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Section: Reading Mode */}
         <Text style={[styles.sectionLabel, { color: colors.primary }]}>Reading Mode</Text>
 
-        <TouchableOpacity style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <View>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Default reading mode</Text>
-            <Text style={[styles.settingSub, { color: colors.primary, fontWeight: '700' }]}>
-              {settings.readingMode === 'long_strip' ? 'Long strip (Continuous)' : 'Single Page'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Section: Long Strip Options */}
-        <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 24 }]}>
-          Long strip layout
+        <Text style={[styles.settingSubTitle, { color: colors.textSecondary }]}>
+          Default reading layout when opening books
         </Text>
 
-        {/* Side Padding Slider Bar */}
-        <View style={styles.sliderContainer}>
-          <View style={styles.sliderHeader}>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Side padding</Text>
-            <Text style={[styles.settingSub, { color: colors.primary, fontWeight: '700' }]}>
-              {settings.sidePadding}%
-            </Text>
-          </View>
-          <View style={[styles.sliderTrack, { backgroundColor: colors.surfaceVariant }]}>
-            <View
-              style={[
-                styles.sliderFill,
-                { width: `${(settings.sidePadding / 25) * 100}%`, backgroundColor: colors.primary },
-              ]}
-            />
-          </View>
-          <View style={styles.sliderButtonsRow}>
-            {[0, 5, 10, 15, 20, 25].map((pad) => (
+        <View style={styles.modeCardsContainer}>
+          {readingModes.map((m) => {
+            const isSelected = settings.readingMode === m.id;
+            return (
               <TouchableOpacity
-                key={pad}
+                key={m.id}
                 style={[
-                  styles.padChip,
-                  { backgroundColor: colors.surface },
-                  settings.sidePadding === pad && { backgroundColor: colors.primary },
+                  styles.modeCard,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                  isSelected && { borderColor: colors.primary, borderWidth: 2 },
                 ]}
-                onPress={() => updateSettings({ sidePadding: pad })}
+                onPress={() => updateSettings({ readingMode: m.id })}
+                activeOpacity={0.7}
               >
-                <Text
-                  style={[
-                    styles.padChipText,
-                    { color: colors.textSecondary },
-                    settings.sidePadding === pad && { color: colors.onPrimary, fontWeight: '700' },
-                  ]}
-                >
-                  {pad}%
-                </Text>
+                <View style={styles.modeCardHeader}>
+                  <Text
+                    style={[
+                      styles.modeCardLabel,
+                      { color: isSelected ? colors.primary : colors.textPrimary },
+                      isSelected && { fontWeight: '700' },
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                  <View
+                    style={[
+                      styles.radioCircle,
+                      { borderColor: isSelected ? colors.primary : colors.border },
+                      isSelected && { backgroundColor: colors.primary },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.modeCardDesc, { color: colors.textSecondary }]}>{m.desc}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
+            );
+          })}
         </View>
 
-        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <View style={styles.labelWrapper}>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Crop borders</Text>
-            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Remove blank page margins</Text>
-          </View>
-          <Switch
-            value={settings.cropBorders}
-            onValueChange={(cropBorders) => updateSettings({ cropBorders })}
-            trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-            thumbColor="#FFFFFF"
+        {/* Section: Layout & Margins */}
+        <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 24 }]}>
+          Layout & Spacing
+        </Text>
+
+        {/* Mihon-Style Side Padding Slider (Mode Specific) */}
+        <View style={[styles.sliderBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <MihonSlider
+            label={
+              settings.readingMode === 'long_strip'
+                ? 'Side padding (Long Strip)'
+                : settings.readingMode === 'single_page_v'
+                ? 'Side padding (Vertical)'
+                : 'Side padding (Paged LTR)'
+            }
+            value={
+              settings.readingMode === 'long_strip'
+                ? (settings.sidePaddingLongStrip ?? settings.sidePadding ?? 0)
+                : settings.readingMode === 'single_page_v'
+                ? (settings.sidePaddingPagedVertical ?? settings.sidePadding ?? 0)
+                : (settings.sidePaddingPagedLtr ?? 0)
+            }
+            min={0}
+            max={25}
+            step={1}
+            helpText="Adjusts side margins specifically for the active reading mode (0% - 25%)."
+            onChange={(val) => {
+              if (settings.readingMode === 'long_strip') {
+                updateSettings({ sidePaddingLongStrip: val, sidePadding: val });
+              } else if (settings.readingMode === 'single_page_v') {
+                updateSettings({ sidePaddingPagedVertical: val });
+              } else {
+                updateSettings({ sidePaddingPagedLtr: val });
+              }
+            }}
           />
         </View>
 
         <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
           <View style={styles.labelWrapper}>
             <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Double tap to zoom</Text>
-            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Quick zoom in/out gesture</Text>
+            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>
+              Double tap anywhere on a page to quickly zoom in or out
+            </Text>
           </View>
           <Switch
             value={settings.doubleTapToZoom}
@@ -113,30 +151,17 @@ export default function ReaderSettingsScreen() {
           />
         </View>
 
-        {/* Section: Display & Gestures */}
+        {/* Section: Navigation & System */}
         <Text style={[styles.sectionLabel, { color: colors.primary, marginTop: 24 }]}>
-          Display & Navigation
+          Navigation & System
         </Text>
 
         <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
           <View style={styles.labelWrapper}>
-            <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Volume keys navigation</Text>
-            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>
-              Use hardware volume buttons to flip pages
-            </Text>
-          </View>
-          <Switch
-            value={settings.volumeKeyNavigation}
-            onValueChange={(volumeKeyNavigation) => updateSettings({ volumeKeyNavigation })}
-            trackColor={{ false: colors.surfaceVariant, true: colors.primary }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-
-        <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-          <View style={styles.labelWrapper}>
             <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Keep screen awake</Text>
-            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Prevent screen timeout while reading</Text>
+            <Text style={[styles.settingSub, { color: colors.textSecondary }]}>
+              Prevent screen timeout while reading documents
+            </Text>
           </View>
           <Switch
             value={settings.keepScreenOn}
@@ -150,7 +175,7 @@ export default function ReaderSettingsScreen() {
           <View style={styles.labelWrapper}>
             <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>Incognito Reading Mode</Text>
             <Text style={[styles.settingSub, { color: colors.textSecondary }]}>
-              Pause saving reading history & timestamps
+              Pause tracking reading history and session statistics
             </Text>
           </View>
           <Switch
@@ -160,6 +185,18 @@ export default function ReaderSettingsScreen() {
             thumbColor="#FFFFFF"
           />
         </View>
+
+        {/* Reset Settings Action */}
+        <TouchableOpacity
+          style={[styles.resetBtn, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}
+          onPress={handleReset}
+          activeOpacity={0.7}
+        >
+          <RotateCcw size={16} color={colors.textSecondary} />
+          <Text style={[styles.resetBtnText, { color: colors.textSecondary }]}>
+            Reset to Default Settings
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -186,13 +223,51 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 18,
-    paddingBottom: 40,
+    paddingBottom: 48,
   },
   sectionLabel: {
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: 8,
     letterSpacing: 0.5,
+  },
+  settingSubTitle: {
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  modeCardsContainer: {
+    gap: 8,
+    marginBottom: 8,
+  },
+  modeCard: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  modeCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modeCardLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modeCardDesc: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+  },
+  sliderBox: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginVertical: 8,
   },
   settingRow: {
     flexDirection: 'row',
@@ -213,33 +288,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  sliderContainer: {
-    marginVertical: 12,
-  },
-  sliderHeader: {
+  resetBtn: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  sliderTrack: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  sliderFill: {
-    height: '100%',
-  },
-  sliderButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  padChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
     borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 32,
+    gap: 8,
   },
-  padChipText: {
-    fontSize: 11,
+  resetBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

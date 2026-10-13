@@ -23,13 +23,14 @@ interface LibraryContextType {
   setSortOption: (option: SortOption) => void;
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
-  addBook: (book: Omit<Book, 'id' | 'addedAt' | 'lastReadAt' | 'bookmarks' | 'currentPage' | 'readingTimeMinutes' | 'status'>) => Promise<Book>;
+  addBook: (book: Omit<Book, 'id' | 'addedAt' | 'lastReadAt' | 'bookmarks' | 'currentPage' | 'readingTimeMinutes' | 'readingTimeSeconds' | 'status'>) => Promise<Book>;
   updateBookProgress: (
     bookId: string,
     page: number,
     totalPages?: number,
     isIncognito?: boolean
   ) => Promise<void>;
+  recordReadingTime: (bookId: string, seconds: number, isIncognito?: boolean) => Promise<void>;
   updateBookCover: (bookId: string, coverUrl: string) => Promise<void>;
   updateBookUri: (bookId: string, newUri: string, newFileSize?: number) => Promise<void>;
   toggleBookmark: (bookId: string, page: number, title?: string) => Promise<void>;
@@ -75,8 +76,20 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addBook = async (
-    bookData: Omit<Book, 'id' | 'addedAt' | 'lastReadAt' | 'bookmarks' | 'currentPage' | 'readingTimeMinutes' | 'status'>
+    bookData: Omit<Book, 'id' | 'addedAt' | 'lastReadAt' | 'bookmarks' | 'currentPage' | 'readingTimeMinutes' | 'readingTimeSeconds' | 'status'>
   ): Promise<Book> => {
+    // 1. Fetch fresh books directly from disk to prevent stale closures from overwriting the library
+    const existingBooks = await getStoredBooks();
+
+    // Check if book with matching URI already exists in persistent storage
+    const duplicate = existingBooks.find(
+      (b) => b.uri === bookData.uri || (b.originalUri && bookData.originalUri && b.originalUri === bookData.originalUri)
+    );
+    if (duplicate) {
+      console.log('[LibraryContext] Book already exists in storage, returning existing:', duplicate.id);
+      return duplicate;
+    }
+
     const newBook: Book = {
       ...bookData,
       id: `book-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -86,10 +99,11 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       status: 'unread',
       bookmarks: [],
       readingTimeMinutes: 0,
-      categoryIds: bookData.categoryIds.length > 0 ? bookData.categoryIds : ['cat-all'],
+      readingTimeSeconds: 0,
+      categoryIds: bookData.categoryIds && bookData.categoryIds.length > 0 ? bookData.categoryIds : ['cat-all'],
     };
 
-    const updated = [newBook, ...books];
+    const updated = [newBook, ...existingBooks];
     setBooks(updated);
     await saveStoredBooks(updated);
     return newBook;
@@ -101,25 +115,45 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     totalPages?: number,
     isIncognito?: boolean
   ) => {
-    const updated = books.map((b) => {
-      if (b.id !== bookId) return b;
-      const tPages = totalPages || b.totalPages || 1;
-      const targetPage = Math.max(1, Math.min(page, tPages));
-      const isCompleted = targetPage >= tPages;
-      const status: StatusType = isCompleted ? 'completed' : targetPage > 1 ? 'reading' : b.status;
+    setBooks((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id !== bookId) return b;
+        const tPages = totalPages || b.totalPages || 1;
+        const targetPage = Math.max(1, Math.min(page, tPages));
+        const isCompleted = targetPage >= tPages;
+        const status: StatusType = isCompleted ? 'completed' : targetPage > 1 ? 'reading' : b.status;
 
-      return {
-        ...b,
-        currentPage: targetPage,
-        totalPages: tPages,
-        status,
-        lastReadAt: isIncognito ? b.lastReadAt : new Date().toISOString(),
-        readingTimeMinutes: isIncognito ? b.readingTimeMinutes : b.readingTimeMinutes + 1,
-      };
+        return {
+          ...b,
+          currentPage: targetPage,
+          totalPages: tPages,
+          status,
+          lastReadAt: isIncognito ? b.lastReadAt : new Date().toISOString(),
+        };
+      });
+      saveStoredBooks(updated);
+      return updated;
     });
+  };
 
-    setBooks(updated);
-    await saveStoredBooks(updated);
+  const recordReadingTime = async (bookId: string, seconds: number, isIncognito?: boolean) => {
+    if (isIncognito || seconds <= 0) return;
+    setBooks((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id !== bookId) return b;
+        const prevSec = b.readingTimeSeconds ?? ((b.readingTimeMinutes || 0) * 60);
+        const newSec = prevSec + seconds;
+        const newMins = Math.floor(newSec / 60);
+        return {
+          ...b,
+          readingTimeSeconds: newSec,
+          readingTimeMinutes: newMins,
+          lastReadAt: new Date().toISOString(),
+        };
+      });
+      saveStoredBooks(updated);
+      return updated;
+    });
   };
 
   const updateBookCover = async (bookId: string, coverUrl: string) => {
@@ -131,94 +165,109 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateBookUri = async (bookId: string, newUri: string, newFileSize?: number) => {
-    const updated = books.map((b) => {
-      if (b.id !== bookId) return b;
-      return {
-        ...b,
-        uri: newUri,
-        fileSize: newFileSize ?? b.fileSize,
-      };
+    setBooks((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id !== bookId) return b;
+        return {
+          ...b,
+          uri: newUri,
+          fileSize: newFileSize ?? b.fileSize,
+        };
+      });
+      saveStoredBooks(updated);
+      return updated;
     });
-    setBooks(updated);
-    await saveStoredBooks(updated);
   };
 
   const toggleBookmark = async (bookId: string, page: number, title?: string) => {
-    const updated = books.map((b) => {
-      if (b.id !== bookId) return b;
-      const existingIdx = b.bookmarks.findIndex((bm) => bm.page === page);
-      let newBookmarks: Bookmark[];
+    setBooks((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id !== bookId) return b;
+        const existingIdx = b.bookmarks.findIndex((bm) => bm.page === page);
+        let newBookmarks: Bookmark[];
 
-      if (existingIdx >= 0) {
-        newBookmarks = b.bookmarks.filter((_, idx) => idx !== existingIdx);
-      } else {
-        const newBm: Bookmark = {
-          id: `bm-${Date.now()}`,
-          page,
-          title: title || `Page ${page}`,
-          createdAt: new Date().toISOString(),
-        };
-        newBookmarks = [...b.bookmarks, newBm].sort((a, b) => a.page - b.page);
-      }
+        if (existingIdx >= 0) {
+          newBookmarks = b.bookmarks.filter((_, idx) => idx !== existingIdx);
+        } else {
+          const newBm: Bookmark = {
+            id: `bm-${Date.now()}`,
+            page,
+            title: title || `Page ${page}`,
+            createdAt: new Date().toISOString(),
+          };
+          newBookmarks = [...b.bookmarks, newBm].sort((a, b) => a.page - b.page);
+        }
 
-      return { ...b, bookmarks: newBookmarks };
+        return { ...b, bookmarks: newBookmarks };
+      });
+      saveStoredBooks(updated);
+      return updated;
     });
-
-    setBooks(updated);
-    await saveStoredBooks(updated);
   };
 
   const updateBookmarkNote = async (bookId: string, bookmarkId: string, note: string) => {
-    const updated = books.map((b) => {
-      if (b.id !== bookId) return b;
-      const newBookmarks = b.bookmarks.map((bm) =>
-        bm.id === bookmarkId ? { ...bm, note } : bm
-      );
-      return { ...b, bookmarks: newBookmarks };
+    setBooks((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id !== bookId) return b;
+        const newBookmarks = b.bookmarks.map((bm) =>
+          bm.id === bookmarkId ? { ...bm, note } : bm
+        );
+        return { ...b, bookmarks: newBookmarks };
+      });
+      saveStoredBooks(updated);
+      return updated;
     });
-    setBooks(updated);
-    await saveStoredBooks(updated);
   };
 
   const deleteBookmark = async (bookId: string, bookmarkId: string) => {
-    const updated = books.map((b) => {
-      if (b.id !== bookId) return b;
-      return { ...b, bookmarks: b.bookmarks.filter((bm) => bm.id !== bookmarkId) };
+    setBooks((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id !== bookId) return b;
+        return { ...b, bookmarks: b.bookmarks.filter((bm) => bm.id !== bookmarkId) };
+      });
+      saveStoredBooks(updated);
+      return updated;
     });
-    setBooks(updated);
-    await saveStoredBooks(updated);
   };
 
   const updateBookStatus = async (bookId: string, status: StatusType) => {
-    const updated = books.map((b) => (b.id === bookId ? { ...b, status } : b));
-    setBooks(updated);
-    await saveStoredBooks(updated);
+    setBooks((prev) => {
+      const updated = prev.map((b) => (b.id === bookId ? { ...b, status } : b));
+      saveStoredBooks(updated);
+      return updated;
+    });
   };
 
   const updateBookCategories = async (bookId: string, categoryIds: string[]) => {
-    const updated = books.map((b) =>
-      b.id === bookId
-        ? { ...b, categoryIds: categoryIds.length > 0 ? categoryIds : ['cat-all'] }
-        : b
-    );
-    setBooks(updated);
-    await saveStoredBooks(updated);
+    setBooks((prev) => {
+      const updated = prev.map((b) =>
+        b.id === bookId
+          ? { ...b, categoryIds: categoryIds.length > 0 ? categoryIds : ['cat-all'] }
+          : b
+      );
+      saveStoredBooks(updated);
+      return updated;
+    });
   };
 
   const toggleFavorite = async (bookId: string) => {
-    const updated = books.map((b) => (b.id === bookId ? { ...b, isFavorite: !b.isFavorite } : b));
-    setBooks(updated);
-    await saveStoredBooks(updated);
+    setBooks((prev) => {
+      const updated = prev.map((b) => (b.id === bookId ? { ...b, isFavorite: !b.isFavorite } : b));
+      saveStoredBooks(updated);
+      return updated;
+    });
   };
 
   const deleteBook = async (bookId: string) => {
-    const bookToDelete = books.find((b) => b.id === bookId);
-    if (bookToDelete) {
-      await deleteBookFile(bookToDelete.uri, bookToDelete.coverUrl);
-    }
-    const updated = books.filter((b) => b.id !== bookId);
-    setBooks(updated);
-    await saveStoredBooks(updated);
+    setBooks((prev) => {
+      const bookToDelete = prev.find((b) => b.id === bookId);
+      if (bookToDelete) {
+        deleteBookFile(bookToDelete.uri, bookToDelete.coverUrl);
+      }
+      const updated = prev.filter((b) => b.id !== bookId);
+      saveStoredBooks(updated);
+      return updated;
+    });
   };
 
   const createCategory = async (name: string, icon = 'folder'): Promise<Category> => {
@@ -270,6 +319,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setViewMode,
         addBook,
         updateBookProgress,
+        recordReadingTime,
         updateBookCover,
         updateBookUri,
         toggleBookmark,

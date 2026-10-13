@@ -8,35 +8,110 @@ const getLogFilePath = (): string => {
   return `${dir}${LOG_FILE_NAME}`;
 };
 
+let writeQueue: Promise<void> = Promise.resolve();
+
+const appendToLogFile = (logEntry: string): Promise<void> => {
+  writeQueue = writeQueue.then(async () => {
+    try {
+      const filePath = getLogFilePath();
+      const fileInfo = await FileSystem.getInfoAsync(filePath);
+      let existingContent = '';
+      if (fileInfo.exists) {
+        existingContent = await FileSystem.readAsStringAsync(filePath, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+      }
+      const combined = existingContent + logEntry;
+      // Keep last 150 KB to prevent unbounded file growth while keeping recent logs
+      const truncated = combined.length > 150000 ? combined.slice(-120000) : combined;
+      await FileSystem.writeAsStringAsync(filePath, truncated, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+    } catch (err) {
+      // Avoid recursive crash
+    }
+  });
+  return writeQueue;
+};
+
 export const logError = async (context: string, error?: any): Promise<void> => {
   try {
-    const filePath = getLogFilePath();
     const timestamp = new Date().toISOString();
-    const errDetails = error
-      ? typeof error === 'string'
-        ? error
-        : error.stack || error.message || JSON.stringify(error)
-      : 'No stack trace';
+    let errDetails = 'No details';
 
-    const logEntry = `[${timestamp}] [ERROR] ${context}\nDetails: ${errDetails}\n----------------------------------------\n`;
-
-    const fileInfo = await FileSystem.getInfoAsync(filePath);
-    if (fileInfo.exists) {
-      const existingContent = await FileSystem.readAsStringAsync(filePath, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-      // Keep last 100 KB to avoid uncontrolled log growth
-      const truncated = existingContent.length > 100000 ? existingContent.slice(-80000) : existingContent;
-      await FileSystem.writeAsStringAsync(filePath, truncated + logEntry, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-    } else {
-      await FileSystem.writeAsStringAsync(filePath, logEntry, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+    if (error) {
+      if (error instanceof Error) {
+        errDetails = `${error.name}: ${error.message}\nStack: ${error.stack || 'No stack'}`;
+      } else if (typeof error === 'string') {
+        errDetails = error;
+      } else {
+        try {
+          errDetails = JSON.stringify(error, Object.getOwnPropertyNames(error));
+        } catch {
+          errDetails = String(error);
+        }
+      }
     }
+
+    const logEntry = `[${timestamp}] [${context}]\n${errDetails}\n----------------------------------------\n`;
+    await appendToLogFile(logEntry);
   } catch (e) {
-    console.error('Failed to write crash log entry:', e);
+    // Silent fail to avoid loop
+  }
+};
+
+let isCrashLoggingInitialized = false;
+
+export const setupGlobalCrashLogging = (): void => {
+  if (isCrashLoggingInitialized) return;
+  isCrashLoggingInitialized = true;
+
+  // React Native Global Error Handler (Fatal / Uncaught Exceptions)
+  const globalAny = globalThis as any;
+  if (globalAny && globalAny.ErrorUtils) {
+    const originalHandler = globalAny.ErrorUtils.getGlobalHandler();
+    globalAny.ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+      const tag = isFatal ? 'FATAL APP CRASH' : 'UNCAUGHT EXCEPTION';
+      logError(tag, error);
+      if (originalHandler) {
+        originalHandler(error, isFatal);
+      }
+    });
+  }
+
+  // Intercept console.error to record runtime redbox errors and library failures
+  const originalConsoleError = console.error;
+  console.error = (...args: any[]) => {
+    originalConsoleError(...args);
+    try {
+      const msg = args
+        .map((a) => {
+          if (a instanceof Error) return `${a.name}: ${a.message}\n${a.stack}`;
+          if (typeof a === 'object') {
+            try {
+              return JSON.stringify(a);
+            } catch {
+              return String(a);
+            }
+          }
+          return String(a);
+        })
+        .join(' ');
+
+      if (
+        !msg.includes('Failed to write crash log') &&
+        !msg.includes('readme_crash_logs')
+      ) {
+        logError('Runtime Console Error', msg);
+      }
+    } catch (_) {}
+  };
+
+  // Unhandled promise rejections
+  if (typeof globalAny.onunhandledrejection !== 'undefined') {
+    globalAny.onunhandledrejection = (event: any) => {
+      logError('Unhandled Promise Rejection', event?.reason || event);
+    };
   }
 };
 

@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter, usePathname, Stack } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLibrary } from '../contexts/LibraryContext';
-import { saveBookFilePermanently } from '../utils/storage';
+import { handleExternalPdfUri, normalizeExternalPdfUri } from '../utils/fileImport';
 import { BookOpen } from 'lucide-react-native';
 
 export default function NotFoundScreen() {
@@ -14,8 +14,11 @@ export default function NotFoundScreen() {
   const { books, addBook } = useLibrary();
   const [isOpeningFile, setIsOpeningFile] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const hasHandledRef = useRef(false);
 
   useEffect(() => {
+    if (hasHandledRef.current) return;
+
     let isMounted = true;
 
     async function handleIntentRoute() {
@@ -25,71 +28,20 @@ export default function NotFoundScreen() {
 
         if (!candidateUrl) return;
 
-        const lower = candidateUrl.toLowerCase();
-        const isPdfCandidate =
-          lower.includes('.pdf') ||
-          lower.includes('.provider') ||
-          candidateUrl.startsWith('content://') ||
-          candidateUrl.startsWith('file://');
+        const { isPdfCandidate } = normalizeExternalPdfUri(candidateUrl);
+        if (!isPdfCandidate) return;
 
-        if (!isPdfCandidate) {
-          return;
-        }
+        hasHandledRef.current = true;
+        if (isMounted) setIsOpeningFile(true);
 
-        setIsOpeningFile(true);
-
-        // Reconstruct Android Content URI or direct file URI
-        let realUri = candidateUrl;
-        if (candidateUrl.startsWith('readme://')) {
-          // Convert readme://com.google.android.apps... back to content://com.google.android.apps...
-          realUri = candidateUrl.replace(/^readme:\/\//, 'content://');
-        }
-
-        // Check if there is an embedded file:/// in the provider URL (e.g. file%253A%252F%252F...)
-        if (realUri.includes('file%253A') || realUri.includes('file%3A')) {
-          try {
-            const decodedTwice = decodeURIComponent(decodeURIComponent(realUri));
-            const match = decodedTwice.match(/file:\/\/\/[^\s&]+/);
-            if (match && match[0]) {
-              realUri = match[0];
-            }
-          } catch (_) {}
-        }
-
-        // Check if book already exists in library
-        const existing = books.find((b) => b.uri === realUri || b.uri === candidateUrl);
-        if (existing) {
-          if (isMounted) {
-            router.replace(`/reader/${existing.id}`);
-          }
-          return;
-        }
-
-        // Extract readable filename
-        let fileName = 'Document.pdf';
-        try {
-          const decoded = decodeURIComponent(decodeURIComponent(candidateUrl));
-          const parts = decoded.split('/');
-          const last = parts[parts.length - 1];
-          if (last) {
-            fileName = last.endsWith('.pdf') ? last : `${last}.pdf`;
-          }
-        } catch (_) {}
-
-        const title = fileName.replace(/\.pdf$/i, '').replace(/[_+]/g, ' ') || 'External Document';
-        const permanentUri = await saveBookFilePermanently(realUri, fileName);
-
-        const newBook = await addBook({
-          title,
-          author: 'External Document',
-          uri: permanentUri,
-          fileSize: 2000000,
-          totalPages: 1,
-          categoryIds: ['cat-all'],
+        const bookId = await handleExternalPdfUri(candidateUrl, {
+          books,
+          addBook,
+          router,
         });
 
-        if (isMounted) {
-          router.replace(`/reader/${newBook.id}`);
+        if (!bookId && isMounted) {
+          setIsOpeningFile(false);
         }
       } catch (err: any) {
         console.error('[NotFoundScreen] Failed to parse intent route:', err);
@@ -105,7 +57,7 @@ export default function NotFoundScreen() {
     return () => {
       isMounted = false;
     };
-  }, [pathname, books]);
+  }, []);
 
   if (isOpeningFile) {
     return (

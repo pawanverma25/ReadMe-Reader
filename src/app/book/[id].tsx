@@ -238,7 +238,13 @@ export default function BookDetailsScreen() {
                         <View style={styles.statBox}>
                             <Clock size={16} color={colors.primary} />
                             <Text style={[styles.statValue, { color: colors.textPrimary }]}>
-                                {book.readingTimeMinutes || 0}m
+                                {(book.readingTimeMinutes || 0) >= 60
+                                    ? `${Math.floor((book.readingTimeMinutes || 0) / 60)}h ${(book.readingTimeMinutes || 0) % 60}m`
+                                    : (book.readingTimeMinutes || 0) > 0
+                                    ? `${book.readingTimeMinutes}m`
+                                    : (book.readingTimeSeconds || 0) > 0
+                                    ? `${book.readingTimeSeconds}s`
+                                    : '0m'}
                             </Text>
                             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Time Read</Text>
                         </View>

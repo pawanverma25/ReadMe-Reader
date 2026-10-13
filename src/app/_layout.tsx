@@ -6,74 +6,37 @@ import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { LibraryProvider, useLibrary } from '../contexts/LibraryContext';
 import { ReaderProvider } from '../contexts/ReaderContext';
 import { SecurityProvider } from '../contexts/SecurityContext';
-import { saveBookFilePermanently } from '../utils/storage';
+import { handleExternalPdfUri } from '../utils/fileImport';
 import { ThumbnailGenerator } from '../components/common/ThumbnailGenerator';
+import { setupGlobalCrashLogging } from '../utils/logger';
+import { ErrorBoundary } from '../components/common/ErrorBoundary';
+
+setupGlobalCrashLogging();
 
 function RootLayoutNav() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const { books, addBook } = useLibrary();
-  const processedUrlsRef = useRef<Set<string>>(new Set());
+  const booksRef = useRef(books);
+  booksRef.current = books;
 
   useEffect(() => {
-    async function handleIncomingFile(url: string | null) {
-      if (!url || processedUrlsRef.current.has(url)) return;
-      try {
-        const lower = url.toLowerCase();
-        // Check if URL represents a PDF (direct .pdf file, content://, file://)
-        const isPdf =
-          lower.endsWith('.pdf') ||
-          url.startsWith('content://') ||
-          (url.startsWith('file://') && lower.endsWith('.pdf'));
-
-        if (!isPdf) return;
-
-        // Check if book with this URI is already in library
-        const existing = books.find((b) => b.uri === url);
-        if (existing) {
-          processedUrlsRef.current.add(url);
-          router.push(`/reader/${existing.id}`);
-          return;
-        }
-
-        processedUrlsRef.current.add(url);
-
-        // Derive title and filename
-        let fileName = 'Imported_Document.pdf';
-        try {
-          const decoded = decodeURIComponent(url);
-          const parts = decoded.split('/');
-          const last = parts[parts.length - 1];
-          if (last) {
-            fileName = last.endsWith('.pdf') ? last : `${last}.pdf`;
-          }
-        } catch (_) {}
-
-        const title = fileName.replace(/\.pdf$/i, '').replace(/[_+]/g, ' ') || 'Opened Document';
-        const permanentUri = await saveBookFilePermanently(url, fileName);
-
-        const newBook = await addBook({
-          title,
-          author: 'External Document',
-          uri: permanentUri,
-          fileSize: 2000000,
-          totalPages: 1,
-          categoryIds: ['cat-all'],
-        });
-
-        router.push(`/reader/${newBook.id}`);
-      } catch (err) {
-        console.error('[RootLayout] Error opening incoming PDF URL:', url, err);
+    // Check initial launch intent URL once on mount
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleExternalPdfUri(url, { books: booksRef.current, addBook, router });
       }
-    }
+    });
 
-    // Check initial launch intent URL
-    Linking.getInitialURL().then(handleIncomingFile);
+    // Listen for incoming URLs while app is running
+    const sub = Linking.addEventListener('url', (e) => {
+      if (e.url) {
+        handleExternalPdfUri(e.url, { books: booksRef.current, addBook, router });
+      }
+    });
 
-    // Listen for incoming URLs while running
-    const sub = Linking.addEventListener('url', (e) => handleIncomingFile(e.url));
     return () => sub.remove();
-  }, [books]);
+  }, []);
 
   return (
     <>
@@ -95,6 +58,7 @@ function RootLayoutNav() {
         <Stack.Screen name="settings/statistics" />
         <Stack.Screen name="settings/security" />
         <Stack.Screen name="settings/advanced" />
+        <Stack.Screen name="settings/about" />
         <Stack.Screen name="+not-found" options={{ headerShown: false, animation: 'fade' }} />
       </Stack>
       <ThumbnailGenerator />
@@ -104,14 +68,16 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <LibraryProvider>
-        <ReaderProvider>
-          <SecurityProvider>
-            <RootLayoutNav />
-          </SecurityProvider>
-        </ReaderProvider>
-      </LibraryProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <LibraryProvider>
+          <ReaderProvider>
+            <SecurityProvider>
+              <RootLayoutNav />
+            </SecurityProvider>
+          </ReaderProvider>
+        </LibraryProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

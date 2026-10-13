@@ -16,6 +16,7 @@ export interface Book {
   coverColor?: string;
   description?: string;
   uri: string;
+  originalUri?: string;
   fileSize?: number;
   totalPages: number;
   currentPage: number;
@@ -26,6 +27,7 @@ export interface Book {
   rating?: number;
   bookmarks: Bookmark[];
   readingTimeMinutes: number;
+  readingTimeSeconds?: number;
   isFavorite?: boolean;
   isSample?: boolean;
 }
@@ -56,14 +58,17 @@ export type ReaderTheme = 'oled' | 'dark' | 'sepia' | 'light';
 export interface ReaderSettings {
   readingMode: ReadingMode;
   readerTheme: ReaderTheme;
-  cropBorders: boolean;
+  cropBorders?: boolean;
   splitWidePages: boolean;
   rotateWidePages: boolean;
   doubleTapToZoom: boolean;
   disableZoomOut: boolean;
-  sidePadding: number; // 0-25
+  sidePadding: number; // fallback / legacy 0-25
+  sidePaddingLongStrip: number; // 0-25
+  sidePaddingPagedLtr: number; // 0-25
+  sidePaddingPagedVertical: number; // 0-25
   keepScreenOn: boolean;
-  volumeKeyNavigation: boolean;
+  volumeKeyNavigation?: boolean;
   showActionsOnLongTap: boolean;
   invertTapZones: boolean;
   incognitoMode?: boolean;

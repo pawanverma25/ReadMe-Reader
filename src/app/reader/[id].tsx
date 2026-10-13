@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -9,7 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { setStatusBarHidden } from 'expo-status-bar';
-import { useKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as DocumentPicker from 'expo-document-picker';
 import { AlertTriangle, ArrowLeft, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -23,7 +24,14 @@ export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
-  const { books, updateBookProgress, updateBookCover, updateBookUri, toggleBookmark } = useLibrary();
+  const {
+    books,
+    updateBookProgress,
+    recordReadingTime,
+    updateBookCover,
+    updateBookUri,
+    toggleBookmark,
+  } = useLibrary();
   const { settings, updateSettings } = useReaderSettings();
 
   const book = books.find((b) => b.id === id);
@@ -37,10 +45,56 @@ export default function ReaderScreen() {
   const canvasRef = useRef<PdfViewerCanvasRef>(null);
   const saveProgressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep screen awake while reading
-  if (settings.keepScreenOn) {
-    useKeepAwake();
-  }
+  // Keep screen awake while reading without violating React hook rules
+  useEffect(() => {
+    const TAG = 'readme-reader-screen';
+    if (settings.keepScreenOn) {
+      activateKeepAwakeAsync(TAG);
+    } else {
+      deactivateKeepAwake(TAG);
+    }
+    return () => {
+      deactivateKeepAwake(TAG);
+    };
+  }, [settings.keepScreenOn]);
+
+  // Track actual active wall-clock reading time
+  useEffect(() => {
+    if (!book) return;
+
+    let sessionStart = Date.now();
+    let accumulatedSeconds = 0;
+
+    const flushReadingTime = () => {
+      if (settings.incognitoMode) return;
+      const now = Date.now();
+      const elapsed = Math.floor((now - sessionStart) / 1000);
+      const totalToAdd = accumulatedSeconds + elapsed;
+      if (totalToAdd > 0) {
+        recordReadingTime(book.id, totalToAdd, settings.incognitoMode);
+      }
+      accumulatedSeconds = 0;
+      sessionStart = Date.now();
+    };
+
+    // Periodic flush every 30 seconds
+    const interval = setInterval(flushReadingTime, 30000);
+
+    // Pause timer when app is minimized or backgrounded, resume when active
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        sessionStart = Date.now();
+      } else {
+        flushReadingTime();
+      }
+    });
+
+    return () => {
+      appStateSub.remove();
+      clearInterval(interval);
+      flushReadingTime();
+    };
+  }, [book?.id, settings.incognitoMode]);
 
   // Manage Status Bar hiding
   useEffect(() => {

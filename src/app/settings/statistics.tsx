@@ -11,10 +11,21 @@ export default function StatisticsScreen() {
   const router = useRouter();
   const { books } = useLibrary();
 
-  const totalReadMins = books.reduce((acc, b) => acc + (b.readingTimeMinutes || 0), 0);
+  const totalReadSecs = books.reduce(
+    (acc, b) => acc + (b.readingTimeSeconds ?? ((b.readingTimeMinutes || 0) * 60)),
+    0
+  );
+  const totalReadMins = Math.floor(totalReadSecs / 60);
   const hours = Math.floor(totalReadMins / 60);
   const mins = totalReadMins % 60;
-  const readDurationText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m 00s`;
+  const secs = totalReadSecs % 60;
+
+  const readDurationText =
+    hours > 0
+      ? `${hours}h ${mins}m`
+      : mins > 0
+      ? `${mins}m ${secs}s`
+      : `${secs}s`;
 
   const completedCount = books.filter((b) => b.status === 'completed').length;
   const startedCount = books.filter((b) => b.currentPage > 1).length;
