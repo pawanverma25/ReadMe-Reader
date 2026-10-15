@@ -10,6 +10,7 @@
 1. **Never run `eas build` automatically**: Do NOT execute any cloud build or deployment command on your own.
 2. **Local Testing First**: Guide the user to test changes locally via `npx expo start` or `npm run android`.
 3. **Always Verify Type Safety**: Run `npx tsc --noEmit` and ensure 0 errors before concluding any task.
+4. **Always Bump Version Before Pushing**: Update the app version (in `app.json`, `package.json`, and Android `versionCode`) whenever finishing work before committing and pushing.
 
 ## 🏛️ Architectural Commandments
 1. **Zero-Heap Native File Loading & Page Virtualization**: Never use `FileSystem.readAsStringAsync` to read entire PDFs as Base64 into React Native/Java memory (causes `OutOfMemoryError` on 50MB+ files). Pass `file:///` URIs directly to WebView with `baseUrl: 'file:///'` and use native `ArrayBuffer` streaming. Always virtualize page rendering via `IntersectionObserver` to keep memory footprint minimal.
