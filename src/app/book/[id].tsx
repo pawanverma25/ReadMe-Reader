@@ -5,6 +5,7 @@ import {
     Bookmark,
     CheckCircle,
     Clock,
+    FileText,
     FolderKanban,
     Heart,
     Play,
@@ -12,6 +13,7 @@ import {
     Trash2,
     X
 } from 'lucide-react-native';
+import { Image } from 'expo-image';
 import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import {
@@ -36,11 +38,14 @@ export default function BookDetailsScreen() {
     const book = books.find((b) => b.id === id);
 
     const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [coverError, setCoverError] = useState(false);
     const [alertConfig, setAlertConfig] = useState<AlertConfig>({
         visible: false,
         title: '',
         message: '',
     });
+
+    const hasCoverImage = Boolean(book?.coverUrl && book.coverUrl.length > 20 && !coverError);
 
     if (!book) {
         return (
@@ -155,14 +160,29 @@ export default function BookDetailsScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {/* Cover Hero Banner */}
                 <View style={styles.coverHeroContainer}>
-                    <View
+                    <TouchableOpacity
                         style={[
                             styles.coverVisual,
-                            { backgroundColor: colors.primary },
+                            { backgroundColor: book.coverColor || colors.primary },
                         ]}
+                        activeOpacity={0.85}
+                        onPress={() => router.push(`/reader/${book.id}`)}
                     >
-                        <Text style={styles.coverText}>{book.title.substring(0, 2).toUpperCase()}</Text>
-                    </View>
+                        {hasCoverImage ? (
+                            <Image
+                                source={{ uri: book.coverUrl }}
+                                style={styles.coverImage}
+                                contentFit="cover"
+                                transition={200}
+                                onError={() => setCoverError(true)}
+                            />
+                        ) : (
+                            <View style={styles.fallbackCoverBox}>
+                                <FileText size={32} color="#FFFFFF" style={{ marginBottom: 6 }} />
+                                <Text style={styles.coverText}>{book.title.substring(0, 2).toUpperCase()}</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
 
                     <View style={styles.metaContainer}>
                         <Text style={[styles.title, { color: colors.textPrimary }]}>{book.title}</Text>
@@ -394,6 +414,21 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOpacity: 0.2,
         shadowRadius: 6,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    coverImage: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+    },
+    fallbackCoverBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     coverText: {
         color: '#FFFFFF',

@@ -25,7 +25,6 @@ export default function SettingsScreen() {
   const router = useRouter();
 
   const appVersion = Constants.expoConfig?.version || '1.1.0';
-  const buildNumber = Constants.expoConfig?.android?.versionCode ?? '1';
 
   const settingsItems = [
     {
@@ -80,7 +79,7 @@ export default function SettingsScreen() {
     {
       id: 'about',
       title: 'About',
-      subtitle: `ReadMe v${appVersion} (Build ${buildNumber})`,
+      subtitle: `ReadMe v${appVersion}`,
       icon: Info,
       route: '/settings/about',
     },

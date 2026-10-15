@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Image,
   Linking,
   ScrollView,
   StyleSheet,
@@ -8,15 +7,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   ArrowLeft,
-  BookOpen,
   Code2,
-  Cpu,
   ExternalLink,
   Layers,
   Lock,
@@ -29,8 +27,6 @@ export default function AboutScreen() {
   const router = useRouter();
 
   const appVersion = Constants.expoConfig?.version || '1.1.0';
-  const buildNumber = Constants.expoConfig?.android?.versionCode ?? '1';
-  const sdkVersion = Constants.expoConfig?.sdkVersion || '57.0.0';
 
   const features = [
     {
@@ -72,8 +68,12 @@ export default function AboutScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Hero Card */}
         <View style={styles.heroSection}>
-          <View style={[styles.iconContainer, { backgroundColor: colors.primaryContainer }]}>
-            <BookOpen size={44} color={colors.primary} />
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../../../assets/images/icon.png')}
+              style={styles.logoImage}
+              contentFit="cover"
+            />
           </View>
           <Text style={[styles.appName, { color: colors.textPrimary }]}>ReadMe</Text>
           <Text style={[styles.appTagline, { color: colors.textSecondary }]}>
@@ -82,7 +82,7 @@ export default function AboutScreen() {
 
           <View style={[styles.versionPill, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}>
             <Text style={[styles.versionText, { color: colors.primary }]}>
-              v{appVersion} (Build {buildNumber})
+              v{appVersion}
             </Text>
           </View>
         </View>
@@ -111,31 +111,6 @@ export default function AboutScreen() {
               </View>
             );
           })}
-        </View>
-
-        {/* Technical Details */}
-        <Text style={[styles.sectionTitle, { color: colors.primary }]}>Build & Runtime</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.techRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
-            <Text style={[styles.techLabel, { color: colors.textSecondary }]}>Version</Text>
-            <Text style={[styles.techValue, { color: colors.textPrimary }]}>{appVersion}</Text>
-          </View>
-          <View style={[styles.techRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
-            <Text style={[styles.techLabel, { color: colors.textSecondary }]}>Build Number</Text>
-            <Text style={[styles.techValue, { color: colors.textPrimary }]}>{buildNumber}</Text>
-          </View>
-          <View style={[styles.techRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
-            <Text style={[styles.techLabel, { color: colors.textSecondary }]}>Expo SDK</Text>
-            <Text style={[styles.techValue, { color: colors.textPrimary }]}>{sdkVersion}</Text>
-          </View>
-          <View style={[styles.techRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
-            <Text style={[styles.techLabel, { color: colors.textSecondary }]}>React Native</Text>
-            <Text style={[styles.techValue, { color: colors.textPrimary }]}>0.86 (React 19)</Text>
-          </View>
-          <View style={styles.techRow}>
-            <Text style={[styles.techLabel, { color: colors.textSecondary }]}>JS Engine</Text>
-            <Text style={[styles.techValue, { color: colors.textPrimary }]}>Hermes</Text>
-          </View>
         </View>
 
         {/* Community & Open Source */}
@@ -195,13 +170,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 24,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
+  logoContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     marginBottom: 14,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   appName: {
     fontSize: 26,
@@ -261,20 +245,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
     lineHeight: 16,
-  },
-  techRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  techLabel: {
-    fontSize: 14,
-  },
-  techValue: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   linkCard: {
     flexDirection: 'row',

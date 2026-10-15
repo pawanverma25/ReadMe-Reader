@@ -10,6 +10,7 @@ interface BookCardProps {
     onPress: () => void;
     onLongPress?: () => void;
     viewMode: 'grid' | 'compact' | 'list';
+    cardWidth?: number;
 }
 
 export const BookCard: React.FC<BookCardProps> = ({
@@ -17,6 +18,7 @@ export const BookCard: React.FC<BookCardProps> = ({
     onPress,
     onLongPress,
     viewMode,
+    cardWidth,
 }) => {
     const { colors } = useTheme();
     const [imgError, setImgError] = React.useState(false);
@@ -107,6 +109,7 @@ export const BookCard: React.FC<BookCardProps> = ({
             style={[
                 styles.gridCard,
                 isCompact && styles.gridCardCompact,
+                cardWidth ? { width: cardWidth } : undefined,
                 { backgroundColor: colors.card, borderColor: colors.border },
             ]}
             onPress={onPress}

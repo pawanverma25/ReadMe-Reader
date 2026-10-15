@@ -6,6 +6,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,6 +42,23 @@ export default function LibraryScreen() {
     viewMode,
     setViewMode,
   } = useLibrary();
+
+  const { width: windowWidth } = useWindowDimensions();
+  const horizontalPadding = 14;
+  const availableWidth = windowWidth - horizontalPadding * 2;
+
+  const compactGap = 10;
+  const compactCardWidth = Math.floor((availableWidth - 2 * compactGap) / 3);
+
+  const gridGap = 12;
+  const gridCardWidth = Math.floor((availableWidth - gridGap) / 2);
+
+  const currentCardWidth =
+    viewMode === 'compact'
+      ? compactCardWidth
+      : viewMode === 'grid'
+      ? gridCardWidth
+      : undefined;
 
   const [isSearching, setIsSearching] = useState(false);
   const [showSortModal, setShowSortModal] = useState(false);
@@ -193,11 +211,18 @@ export default function LibraryScreen() {
           numColumns={viewMode === 'list' ? 1 : viewMode === 'compact' ? 3 : 2}
           key={viewMode} // Force re-render when switching grid columns
           contentContainerStyle={styles.listPadding}
-          columnWrapperStyle={viewMode !== 'list' ? styles.columnWrapper : undefined}
+          columnWrapperStyle={
+            viewMode === 'compact'
+              ? [styles.columnWrapperLeft, { gap: compactGap }]
+              : viewMode === 'grid'
+              ? [styles.columnWrapperLeft, { gap: gridGap }]
+              : undefined
+          }
           renderItem={({ item }) => (
             <BookCard
               book={item}
               viewMode={viewMode}
+              cardWidth={currentCardWidth}
               onPress={() => router.push(`/reader/${item.id}`)}
               onLongPress={() => router.push(`/book/${item.id}`)}
             />
@@ -325,8 +350,9 @@ const styles = StyleSheet.create({
     padding: 14,
     paddingBottom: 80,
   },
-  columnWrapper: {
-    justifyContent: 'space-between',
+  columnWrapperLeft: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
   },
   emptyContainer: {
     flex: 1,
