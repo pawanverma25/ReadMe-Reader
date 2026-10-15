@@ -111,6 +111,7 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css">
   <style>
     :root {
       --bg-color: #000000;
@@ -241,18 +242,79 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       will-change: transform;
     }
 
-    canvas {
-      display: block;
+    .page-container {
+      position: relative;
       margin: 0 auto;
-      max-width: 100%;
-      max-height: 98vh;
-      height: auto;
-      object-fit: contain;
       box-shadow: 0 4px 16px rgba(0,0,0,0.5);
       border-radius: 4px;
+      overflow: hidden;
+      box-sizing: content-box;
+    }
+
+    .page-container canvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      box-shadow: none;
+      border-radius: 0;
       filter: var(--canvas-filter);
-      transition: filter 0.2s ease, transform 0.25s ease;
-      will-change: transform;
+      transition: filter 0.2s ease;
+      pointer-events: none;
+    }
+
+    .page-container .textLayer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      opacity: 1;
+      line-height: 1;
+      -webkit-text-size-adjust: none;
+      text-size-adjust: none;
+      forced-color-adjust: none;
+      transform-origin: 0 0;
+      z-index: 2;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+
+    .page-container .textLayer :is(span, br) {
+      color: transparent !important;
+      position: absolute;
+      white-space: pre;
+      cursor: text;
+      transform-origin: 0 0;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+
+    .page-container .textLayer span.markedContent {
+      top: 0;
+      height: 0;
+    }
+
+    .page-container .textLayer ::selection {
+      background: rgba(0, 102, 255, 0.38) !important;
+    }
+
+    .page-container .textLayer ::-moz-selection {
+      background: rgba(0, 102, 255, 0.38) !important;
+    }
+
+    .page-container .textLayer .endOfContent {
+      display: block;
+      position: absolute;
+      inset: 100% 0 0;
+      z-index: -1;
+      cursor: default;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .page-placeholder {
@@ -620,17 +682,34 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       if (!wrapper) return;
 
       renderingPages.add(pageNum);
-      let canvas = wrapper.querySelector('canvas');
+
+      let pageContainer = wrapper.querySelector('.page-container');
+      if (!pageContainer) {
+        pageContainer = document.createElement('div');
+        pageContainer.className = 'page-container';
+        pageContainer.id = 'page-container-' + pageNum;
+        wrapper.appendChild(pageContainer);
+      }
+
+      let canvas = pageContainer.querySelector('canvas');
       if (!canvas) {
         canvas = document.createElement('canvas');
         canvas.id = 'page-canvas-' + pageNum;
-        wrapper.appendChild(canvas);
+        pageContainer.appendChild(canvas);
+      }
+
+      let textLayer = pageContainer.querySelector('.textLayer');
+      if (!textLayer) {
+        textLayer = document.createElement('div');
+        textLayer.className = 'textLayer';
+        textLayer.id = 'text-layer-' + pageNum;
+        pageContainer.appendChild(textLayer);
       }
 
       const placeholder = wrapper.querySelector('.page-placeholder');
       if (placeholder) placeholder.style.display = 'none';
 
-      await renderPageCanvas(pageNum, canvas, wrapper);
+      await renderPageCanvas(pageNum, pageContainer, canvas, textLayer, wrapper);
       renderingPages.delete(pageNum);
       renderedPages.add(pageNum);
     }
@@ -643,9 +722,16 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       const wrapper = document.getElementById('page-wrapper-' + pageNum);
       if (!wrapper) return;
 
-      const canvas = wrapper.querySelector('canvas');
-      if (canvas) {
-        canvas.remove();
+      const pageContainer = wrapper.querySelector('.page-container');
+      if (pageContainer) {
+        const canvas = pageContainer.querySelector('canvas');
+        if (canvas) {
+          canvas.width = 1;
+          canvas.height = 1;
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.clearRect(0, 0, 1, 1);
+        }
+        pageContainer.remove();
       }
 
       wrapper.style.minHeight = getEstimatedPageHeight() + 'px';
@@ -672,22 +758,87 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       }
     }
 
-    async function renderPageCanvas(pageNum, canvas, wrapper) {
+    async function renderPageCanvas(pageNum, pageContainer, canvas, textLayer, wrapper) {
       if (!pdfDoc) return;
       try {
         const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.25 });
-        const context = canvas.getContext('2d');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
+        const unscaledViewport = page.getViewport({ scale: 1.0 });
 
         // Calculate and stabilize uniform page aspect ratio from page 1
-        if (pageNum === 1 && viewport.width > 0) {
-          pageAspectRatio = viewport.height / viewport.width;
+        if (pageNum === 1 && unscaledViewport.width > 0) {
+          pageAspectRatio = unscaledViewport.height / unscaledViewport.width;
           estimatedPageHeight = getEstimatedPageHeight();
         }
 
-        await page.render({ canvasContext: context, viewport: viewport }).promise;
+        // Determine target CSS dimensions based on container width/height
+        const padPct = (readingMode === 'single_page_h') ? 0 : currentSidePadding;
+        let availWidth = (window.innerWidth || document.documentElement.clientWidth || 360) * (1 - (padPct * 2) / 100);
+
+        let cssScale = 1.0;
+        if (readingMode === 'long_strip') {
+          cssScale = availWidth / unscaledViewport.width;
+        } else {
+          availWidth = Math.max(availWidth - 12, 100);
+          const availHeight = ((window.innerHeight || document.documentElement.clientHeight || 640) - 12) * 0.98;
+          const scaleW = availWidth / unscaledViewport.width;
+          const scaleH = availHeight / unscaledViewport.height;
+          cssScale = Math.min(scaleW, scaleH);
+        }
+
+        if (!Number.isFinite(cssScale) || cssScale <= 0) {
+          cssScale = 1.0;
+        }
+
+        const cssViewport = page.getViewport({ scale: cssScale });
+        const rawDpr = window.devicePixelRatio || 1;
+        const dpr = Math.min(Math.max(rawDpr, 1.5), 2.0);
+        const renderViewport = page.getViewport({ scale: cssScale * dpr });
+
+        const cssWidth = Math.floor(cssViewport.width);
+        const cssHeight = Math.floor(cssViewport.height);
+
+        // Explicit CSS dimensions on container, canvas, and text layer
+        pageContainer.style.width = cssWidth + 'px';
+        pageContainer.style.height = cssHeight + 'px';
+
+        canvas.width = Math.floor(renderViewport.width);
+        canvas.height = Math.floor(renderViewport.height);
+        canvas.style.width = cssWidth + 'px';
+        canvas.style.height = cssHeight + 'px';
+
+        textLayer.innerHTML = '';
+        textLayer.style.width = cssWidth + 'px';
+        textLayer.style.height = cssHeight + 'px';
+        textLayer.style.setProperty('--scale-factor', cssViewport.scale);
+
+        const context = canvas.getContext('2d');
+        const renderPromise = page.render({ canvasContext: context, viewport: renderViewport }).promise;
+
+        let textPromise = null;
+        try {
+          const textContent = await page.getTextContent();
+          if (pdfjsLib.TextLayer) {
+            const textLayerTask = new pdfjsLib.TextLayer({
+              textContentSource: textContent,
+              container: textLayer,
+              viewport: cssViewport,
+            });
+            textPromise = textLayerTask.render();
+          } else if (typeof pdfjsLib.renderTextLayer === 'function') {
+            textPromise = pdfjsLib.renderTextLayer({
+              textContentSource: textContent,
+              textContent: textContent,
+              container: textLayer,
+              viewport: cssViewport,
+              textDivs: []
+            }).promise;
+          }
+        } catch (textErr) {
+          console.warn('[WebView HTML] TextLayer render error for page ' + pageNum, textErr);
+        }
+
+        await renderPromise;
+        if (textPromise) await textPromise;
 
         if (wrapper && readingMode === 'long_strip') {
           wrapper.style.minHeight = 'auto';
@@ -805,11 +956,15 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       }
     }
 
+    let hadSelectionAtTouchStart = false;
+
     // Touch events for HUD toggle, double-tap zoom, and single-page swiping
     document.addEventListener('touchstart', (e) => {
       isUserTouching = true;
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
+      const sel = window.getSelection();
+      hadSelectionAtTouchStart = !!(sel && sel.toString().trim().length > 0);
     }, { passive: true });
 
     document.addEventListener('touchend', (e) => {
@@ -819,6 +974,14 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       const diffY = touchEndY - touchStartY;
 
       setTimeout(() => { isUserTouching = false; }, 150);
+
+      // Selection guard: If user has an active text selection or just dismissed one, ignore HUD/turn gestures
+      const currentSelection = window.getSelection();
+      const hasSelectionNow = !!(currentSelection && currentSelection.toString().trim().length > 0);
+      if (hasSelectionNow || hadSelectionAtTouchStart) {
+        hadSelectionAtTouchStart = false;
+        return;
+      }
 
       // Tap detection for overlay toggle, double tap zoom, or tap navigation
       if (Math.abs(diffX) < 16 && Math.abs(diffY) < 16) {
@@ -845,6 +1008,10 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         if (singleTapTimeout) clearTimeout(singleTapTimeout);
         singleTapTimeout = setTimeout(() => {
           singleTapTimeout = null;
+          const sel = window.getSelection();
+          if (sel && sel.toString().trim().length > 0) {
+            return;
+          }
           if (isZoomedIn) {
             // Tapping while zoomed resets zoom
             handleDoubleTapZoom(touchEndX, touchEndY);
@@ -999,8 +1166,21 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
         }
       }
 
-      currentSidePadding = effectiveSidePadding;
-      root.style.setProperty('--side-padding', currentSidePadding + '%');
+      if (effectiveSidePadding !== currentSidePadding) {
+        currentSidePadding = effectiveSidePadding;
+        root.style.setProperty('--side-padding', currentSidePadding + '%');
+        renderedPages.forEach((p) => {
+          const wrapper = document.getElementById('page-wrapper-' + p);
+          if (wrapper) {
+            const container = wrapper.querySelector('.page-container');
+            const canvas = container ? container.querySelector('canvas') : null;
+            const textLayer = container ? container.querySelector('.textLayer') : null;
+            if (container && canvas && textLayer) {
+              renderPageCanvas(p, container, canvas, textLayer, wrapper);
+            }
+          }
+        });
+      }
 
       const estH = getEstimatedPageHeight();
       const unrenderedWrappers = document.querySelectorAll('.long-strip .page-wrapper');
@@ -1027,6 +1207,16 @@ export const PdfViewerCanvas = React.forwardRef<PdfViewerCanvasRef, PdfViewerCan
       }
     }
     window.applyDynamicSettings = applyDynamicSettings;
+
+    let lastWindowWidth = window.innerWidth;
+    window.addEventListener('resize', () => {
+      if (Math.abs(window.innerWidth - lastWindowWidth) > 60) {
+        lastWindowWidth = window.innerWidth;
+        if (pdfDoc) {
+          renderView();
+        }
+      }
+    });
 
     // Safe Message listener from React Native
     window.addEventListener('message', (event) => {
