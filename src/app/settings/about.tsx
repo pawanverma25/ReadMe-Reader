@@ -26,7 +26,7 @@ export default function AboutScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
 
-  const appVersion = Constants.expoConfig?.version || '1.1.0';
+  const appVersion = Constants.expoConfig?.version || '1.2.0';
 
   const features = [
     {

@@ -24,7 +24,7 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const router = useRouter();
 
-  const appVersion = Constants.expoConfig?.version || '1.1.0';
+  const appVersion = Constants.expoConfig?.version || '1.2.0';
 
   const settingsItems = [
     {
