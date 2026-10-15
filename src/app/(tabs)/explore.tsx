@@ -14,6 +14,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { AlertConfig, ThemedAlert } from '../../components/common/ThemedAlert';
 import { saveBookFilePermanently } from '../../utils/storage';
+import { formatRegistry } from '../../formats';
 import {
   BookPlus,
   FolderOpen,
@@ -44,33 +45,36 @@ export default function ExploreScreen() {
     try {
       setImporting(true);
 
-      // Launch native Storage Access Framework picker (0 permissions required)
+      // Launch native Storage Access Framework picker supporting all registered formats
       const res = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
+        type: formatRegistry.getSupportedMimeTypes(),
         copyToCacheDirectory: true,
       });
 
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const file = res.assets[0];
-        const fileName = file.name || 'Imported PDF Book';
-        const title = fileName.replace(/\.pdf$/i, '');
+        const fileName = file.name || 'Imported Document';
+        const detectedFormat = formatRegistry.detectFormat(fileName, file.mimeType || undefined);
+        const title = formatRegistry.cleanTitle(fileName);
 
         // Copy from temporary picker cache to persistent internal app storage
         const permanentUri = await saveBookFilePermanently(file.uri, fileName);
 
         const newBook = await addBook({
           title,
-          author: 'Local PDF Document',
+          author: 'Local Document',
           uri: permanentUri,
+          format: detectedFormat.id,
+          mimeType: file.mimeType || undefined,
           fileSize: file.size || 2500000,
           totalPages: 1,
-          coverColor: colors.primary,
-          description: `Imported from device storage (${file.name})`,
+          coverColor: detectedFormat.themeColor,
+          description: `Imported ${detectedFormat.name} from device storage (${fileName})`,
           categoryIds: ['cat-all'],
         });
 
         showAlert({
-          title: 'PDF Imported Successfully',
+          title: `${detectedFormat.badge} Imported Successfully`,
           message: `"${title}" has been added to your local library!`,
           type: 'success',
           confirmText: 'Read Now',
@@ -86,10 +90,10 @@ export default function ExploreScreen() {
         });
       }
     } catch (error) {
-      console.error('PDF file pick error:', error);
+      console.error('File pick error:', error);
       showAlert({
         title: 'Import Error',
-        message: 'Could not import selected PDF file. Please select a valid .pdf file.',
+        message: 'Could not import selected document file. Please select a valid supported file.',
         type: 'error',
         confirmText: 'OK',
         onConfirm: hideAlert,
@@ -105,13 +109,29 @@ export default function ExploreScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Import PDF Books</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Import Books & Docs</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Add local PDF eBooks & document files from device storage
+          Add local PDF, EPUB, TXT, CBZ & document files from device storage
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollPadding}>
+        {/* Supported Formats Pills */}
+        <View style={styles.formatsPillsContainer}>
+          <Text style={[styles.formatsPillsLabel, { color: colors.textSecondary }]}>Supported Formats:</Text>
+          <View style={styles.formatsRow}>
+            {formatRegistry.getAllFormats().map((fmt) => (
+              <View
+                key={fmt.id}
+                style={[styles.formatBadgePill, { backgroundColor: colors.surfaceVariant, borderColor: colors.border }]}
+              >
+                <View style={[styles.formatDot, { backgroundColor: fmt.themeColor }]} />
+                <Text style={[styles.formatBadgeText, { color: colors.textPrimary }]}>{fmt.badge}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
         {/* Main Import Hero Card */}
         <TouchableOpacity
           style={[
@@ -128,10 +148,10 @@ export default function ExploreScreen() {
 
           <View style={styles.heroTextContainer}>
             <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-              {importing ? 'Importing PDF...' : 'Select PDF File from Storage'}
+              {importing ? 'Importing File...' : 'Select Document from Storage'}
             </Text>
             <Text style={[styles.heroDesc, { color: colors.textSecondary }]}>
-              Tap to browse your device files and select any .pdf document.
+              Tap to browse device files. Supports PDF, EPUB, TXT, Markdown, CBZ comics.
             </Text>
           </View>
 
@@ -165,7 +185,7 @@ export default function ExploreScreen() {
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
               <Text style={[styles.statNum, { color: colors.primary }]}>{books.length}</Text>
-              <Text style={[styles.statLbl, { color: colors.textSecondary }]}>PDF Books</Text>
+              <Text style={[styles.statLbl, { color: colors.textSecondary }]}>Total Books</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statNum, { color: colors.primary }]}>{categories.length}</Text>
@@ -289,5 +309,40 @@ const styles = StyleSheet.create({
   statLbl: {
     fontSize: 11,
     marginTop: 2,
+  },
+  formatsPillsContainer: {
+    marginBottom: 14,
+  },
+  formatsPillsLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+  formatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  formatBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  formatDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  formatBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

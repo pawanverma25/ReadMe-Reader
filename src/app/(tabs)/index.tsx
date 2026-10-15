@@ -193,14 +193,14 @@ export default function LibraryScreen() {
           <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
             {searchQuery
               ? `No books match "${searchQuery}"`
-              : 'This library category is empty. Import a PDF book or select another category.'}
+              : 'This library category is empty. Import a book or document to start reading.'}
           </Text>
           <TouchableOpacity
             style={[styles.importBtn, { backgroundColor: colors.primary }]}
             onPress={() => router.push('/explore')}
           >
             <Text style={[styles.importBtnText, { color: colors.onPrimary }]}>
-              + Import PDF Book
+              + Import Book or Document
             </Text>
           </TouchableOpacity>
         </View>

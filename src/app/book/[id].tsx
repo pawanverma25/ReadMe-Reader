@@ -28,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AlertConfig, ThemedAlert } from '../../components/common/ThemedAlert';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { formatRegistry } from '../../formats';
 
 export default function BookDetailsScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,6 +65,9 @@ export default function BookDetailsScreen() {
         100,
         Math.round(((book.currentPage || 1) / (book.totalPages || 1)) * 100)
     );
+
+    const detectedFormat = formatRegistry.detectFormat(book.uri, book.mimeType);
+    const formatDef = formatRegistry.getFormatById(book.format) || detectedFormat;
 
     const handleDelete = () => {
         setAlertConfig({
@@ -217,6 +221,10 @@ export default function BookDetailsScreen() {
                                     <Text style={[styles.statusText, { color: '#000000' }]}>FAVORITE</Text>
                                 </View>
                             )}
+
+                            <View style={[styles.statusBadge, { backgroundColor: formatDef.themeColor, marginLeft: 6 }]}>
+                                <Text style={styles.statusText}>{formatDef.badge}</Text>
+                            </View>
                         </View>
                     </View>
                 </View>

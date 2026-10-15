@@ -1,5 +1,6 @@
 import { Book } from '../types';
 import { getStoredBooks, saveBookFilePermanently } from './storage';
+import { formatRegistry } from '../formats';
 
 // Module-level deduplication set and processing lock
 const processedUris = new Set<string>();
@@ -23,23 +24,23 @@ interface IngestOptions {
  * Normalizes an incoming raw URI (which may be a readme:// custom scheme from Android intent,
  * a content:// provider URI, or an encoded file:/// URI) into a usable source URI.
  */
-export function normalizeExternalPdfUri(rawUri: string): { realUri: string; isPdfCandidate: boolean } {
+export function normalizeExternalFileUri(rawUri: string): { realUri: string; isSupportedCandidate: boolean } {
   if (!rawUri || typeof rawUri !== 'string') {
-    return { realUri: '', isPdfCandidate: false };
+    return { realUri: '', isSupportedCandidate: false };
   }
 
   const trimmed = rawUri.trim();
   const lower = trimmed.toLowerCase();
 
-  const isPdfCandidate =
-    lower.includes('.pdf') ||
+  const isCandidate =
+    formatRegistry.isSupportedFile(lower) ||
     lower.includes('.provider') ||
     trimmed.startsWith('content://') ||
     trimmed.startsWith('file://') ||
     trimmed.startsWith('readme://');
 
-  if (!isPdfCandidate) {
-    return { realUri: trimmed, isPdfCandidate: false };
+  if (!isCandidate) {
+    return { realUri: trimmed, isSupportedCandidate: false };
   }
 
   let realUri = trimmed;
@@ -60,21 +61,27 @@ export function normalizeExternalPdfUri(rawUri: string): { realUri: string; isPd
     } catch (_) {}
   }
 
-  return { realUri, isPdfCandidate: true };
+  return { realUri, isSupportedCandidate: true };
+}
+
+// Backward-compatible alias
+export function normalizeExternalPdfUri(rawUri: string) {
+  const res = normalizeExternalFileUri(rawUri);
+  return { realUri: res.realUri, isPdfCandidate: res.isSupportedCandidate };
 }
 
 /**
- * Securely ingests an incoming PDF file intent without triggering infinite loops,
+ * Securely ingests an incoming document/book file intent without triggering infinite loops,
  * duplicate library entries, or file corruptions.
  */
-export async function handleExternalPdfUri(
+export async function handleExternalFileUri(
   rawUri: string | null | undefined,
   options: IngestOptions
 ): Promise<string | null> {
   if (!rawUri) return null;
 
-  const { realUri, isPdfCandidate } = normalizeExternalPdfUri(rawUri);
-  if (!isPdfCandidate) return null;
+  const { realUri, isSupportedCandidate } = normalizeExternalFileUri(rawUri);
+  if (!isSupportedCandidate) return null;
 
   // Prevent concurrent ingestion or duplicate handling of the same URI
   if (processedUris.has(rawUri) || processedUris.has(realUri) || isImportingLock) {
@@ -105,22 +112,27 @@ export async function handleExternalPdfUri(
       return existing.id;
     }
 
-    // 2. Extract clean file name and title
+    // 2. Extract clean file name and detect format
     let fileName = '';
     try {
       const decoded = decodeURIComponent(decodeURIComponent(rawUri));
       const parts = decoded.split('/');
       const last = parts[parts.length - 1];
       if (last && !last.startsWith('document%3A') && !last.startsWith('document:') && !last.startsWith('msf%3A')) {
-        fileName = last.endsWith('.pdf') ? last : `${last}.pdf`;
+        fileName = last;
       }
     } catch (_) {}
 
+    const detectedFormat = formatRegistry.detectFormat(fileName || rawUri);
+    const primaryExt = detectedFormat.extensions[0] || '.pdf';
+
     if (!fileName) {
-      fileName = `Document_${Date.now().toString().slice(-4)}.pdf`;
+      fileName = `Document_${Date.now().toString().slice(-4)}${primaryExt}`;
+    } else if (!detectedFormat.extensions.some((ext) => fileName.toLowerCase().endsWith(ext))) {
+      fileName = `${fileName}${primaryExt}`;
     }
 
-    let title = fileName.replace(/\.pdf$/i, '').replace(/[_+]/g, ' ').trim() || 'External Document';
+    let title = formatRegistry.cleanTitle(fileName) || 'External Document';
 
     // If a different book with the exact same title already exists, append a unique counter
     const titleCollision = currentBooks.filter(
@@ -130,7 +142,7 @@ export async function handleExternalPdfUri(
       title = `${title} (${titleCollision.length + 1})`;
     }
 
-    console.log('[FileImport] Copying external file to permanent storage:', fileName);
+    console.log(`[FileImport] Ingesting ${detectedFormat.name} (${fileName})`);
     const permanentUri = await saveBookFilePermanently(realUri, fileName);
 
     const newBook = await options.addBook({
@@ -138,6 +150,8 @@ export async function handleExternalPdfUri(
       author: 'Local Document',
       uri: permanentUri,
       originalUri: rawUri,
+      format: detectedFormat.id,
+      coverColor: detectedFormat.themeColor,
       fileSize: 2000000,
       totalPages: 1,
       categoryIds: ['cat-all'],
@@ -147,9 +161,13 @@ export async function handleExternalPdfUri(
     options.router.replace(`/reader/${newBook.id}`);
     return newBook.id;
   } catch (err) {
-    console.error('[FileImport] Failed to ingest external PDF:', err);
+    console.error('[FileImport] Failed to ingest external document:', err);
     return null;
   } finally {
     isImportingLock = false;
   }
 }
+
+// Backward-compatible alias
+export const handleExternalPdfUri = handleExternalFileUri;
+

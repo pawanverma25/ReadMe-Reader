@@ -16,9 +16,11 @@ import { AlertTriangle, ArrowLeft, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useReaderSettings } from '../../contexts/ReaderContext';
-import { PdfViewerCanvas, PdfViewerCanvasRef } from '../../components/reader/PdfViewerCanvas';
+import { PdfViewerCanvasRef } from '../../components/reader/PdfViewerCanvas';
+import { ReaderDispatcher } from '../../components/reader/ReaderDispatcher';
 import { ReaderOverlay } from '../../components/reader/ReaderOverlay';
 import { resolveBookUri, saveBookFilePermanently, saveCoverImage } from '../../utils/storage';
+import { formatRegistry } from '../../formats';
 
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -174,8 +176,9 @@ export default function ReaderScreen() {
     if (!book) return;
     try {
       setIsRelinking(true);
+      const targetFormat = formatRegistry.getFormatById(book.format) || formatRegistry.detectFormat(book.uri);
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
+        type: targetFormat.mimeTypes.length > 0 ? targetFormat.mimeTypes : formatRegistry.getSupportedMimeTypes(),
         copyToCacheDirectory: true,
       });
 
@@ -187,15 +190,15 @@ export default function ReaderScreen() {
       const pickedAsset = result.assets[0];
       const permanentUri = await saveBookFilePermanently(
         pickedAsset.uri,
-        pickedAsset.name || book.title || 'document.pdf'
+        pickedAsset.name || book.title || `document.${targetFormat.extensions[0] || 'pdf'}`
       );
 
       await updateBookUri(book.id, permanentUri, pickedAsset.size);
       setResolvedUri(permanentUri);
       setLoadError(null);
     } catch (err: any) {
-      console.error('[ReaderScreen] Failed to relink PDF:', err);
-      Alert.alert('Relink Failed', 'Could not save the selected PDF file. Please try again.');
+      console.error('[ReaderScreen] Failed to relink document:', err);
+      Alert.alert('Relink Failed', 'Could not save the selected file. Please try again.');
     } finally {
       setIsRelinking(false);
     }
@@ -207,9 +210,9 @@ export default function ReaderScreen() {
   }
 
   // Triggered when WebView scrolls or swipes (receiver only: no echo loop)
-  const handlePageChange = (page: number, totalPages: number) => {
+  const handlePageChange = (page: number, totalPages?: number) => {
     setCurrentPage(page);
-    debouncedSaveProgress(page, totalPages);
+    debouncedSaveProgress(page, totalPages || book.totalPages || 1);
   };
 
   // Triggered only by user actions in React Native HUD (Next/Prev button, jump dialog, bookmark)
@@ -239,7 +242,7 @@ export default function ReaderScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textPrimary }]}>
-            Loading PDF Document...
+            Loading Document...
           </Text>
         </View>
       ) : loadError ? (
@@ -249,13 +252,13 @@ export default function ReaderScreen() {
               <AlertTriangle size={36} color={colors.danger} />
             </View>
             <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>
-              PDF File Not Found
+              Document File Not Found
             </Text>
             <Text style={[styles.errorDescription, { color: colors.textSecondary }]}>
               {loadError}
             </Text>
             <Text style={[styles.errorSubtext, { color: colors.textSecondary }]}>
-              Select the PDF file again to relink it. Your reading progress, bookmarks, and notes will be preserved.
+              Select the file again to relink it. Your reading progress, bookmarks, and notes will be preserved.
             </Text>
 
             <TouchableOpacity
@@ -269,7 +272,7 @@ export default function ReaderScreen() {
               ) : (
                 <>
                   <RefreshCw size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                  <Text style={styles.relinkButtonText}>Relink PDF File</Text>
+                  <Text style={styles.relinkButtonText}>Relink Document File</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -287,7 +290,7 @@ export default function ReaderScreen() {
           </View>
         </View>
       ) : (
-        <PdfViewerCanvas
+        <ReaderDispatcher
           ref={canvasRef}
           book={book}
           fileUri={resolvedUri || book.uri}

@@ -6,7 +6,7 @@ import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { LibraryProvider, useLibrary } from '../contexts/LibraryContext';
 import { ReaderProvider } from '../contexts/ReaderContext';
 import { SecurityProvider } from '../contexts/SecurityContext';
-import { handleExternalPdfUri } from '../utils/fileImport';
+import { handleExternalFileUri } from '../utils/fileImport';
 import { ThumbnailGenerator } from '../components/common/ThumbnailGenerator';
 import { setupGlobalCrashLogging } from '../utils/logger';
 import { ErrorBoundary } from '../components/common/ErrorBoundary';
@@ -24,14 +24,14 @@ function RootLayoutNav() {
     // Check initial launch intent URL once on mount
     Linking.getInitialURL().then((url) => {
       if (url) {
-        handleExternalPdfUri(url, { books: booksRef.current, addBook, router });
+        handleExternalFileUri(url, { books: booksRef.current, addBook, router });
       }
     });
 
     // Listen for incoming URLs while app is running
     const sub = Linking.addEventListener('url', (e) => {
       if (e.url) {
-        handleExternalPdfUri(e.url, { books: booksRef.current, addBook, router });
+        handleExternalFileUri(e.url, { books: booksRef.current, addBook, router });
       }
     });
 

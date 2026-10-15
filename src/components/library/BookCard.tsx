@@ -4,6 +4,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Book } from '../../types';
+import { formatRegistry } from '../../formats';
 
 interface BookCardProps {
     book: Book;
@@ -32,7 +33,11 @@ export const BookCard: React.FC<BookCardProps> = ({
         Math.round(((book.currentPage || 1) / (book.totalPages || 1)) * 100)
     );
 
-    const coverBg = book.coverColor || colors.primary;
+    const detectedFormat = formatRegistry.detectFormat(book.uri, book.mimeType);
+    const formatDef = formatRegistry.getFormatById(book.format) || detectedFormat;
+    const formatBadge = formatDef.badge;
+
+    const coverBg = book.coverColor || formatDef.themeColor || colors.primary;
     const hasCoverImage = Boolean(book.coverUrl && book.coverUrl.length > 20 && !imgError);
 
     if (viewMode === 'list') {
@@ -129,7 +134,7 @@ export const BookCard: React.FC<BookCardProps> = ({
                     <View style={styles.bookCoverFallbackContainer}>
                         <View style={styles.bookCoverBadgeHeader}>
                             <FileText size={isCompact ? 20 : 28} color="#FFFFFF" />
-                            <Text style={styles.pdfPillBadge}>PDF</Text>
+                            <Text style={styles.pdfPillBadge}>{formatBadge}</Text>
                         </View>
                         <Text style={[styles.gridCoverTitleText, isCompact && { fontSize: 12 }]} numberOfLines={2}>
                             {book.title}

@@ -17,6 +17,8 @@ export interface Book {
   description?: string;
   uri: string;
   originalUri?: string;
+  format?: string;
+  mimeType?: string;
   fileSize?: number;
   totalPages: number;
   currentPage: number;

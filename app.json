@@ -25,7 +25,13 @@
                     "action": "VIEW",
                     "data": [
                         { "mimeType": "application/pdf", "scheme": "content" },
-                        { "mimeType": "application/pdf", "scheme": "file" }
+                        { "mimeType": "application/pdf", "scheme": "file" },
+                        { "mimeType": "application/epub+zip", "scheme": "content" },
+                        { "mimeType": "application/epub+zip", "scheme": "file" },
+                        { "mimeType": "text/plain", "scheme": "content" },
+                        { "mimeType": "text/plain", "scheme": "file" },
+                        { "mimeType": "application/x-cbz", "scheme": "content" },
+                        { "mimeType": "application/x-cbz", "scheme": "file" }
                     ],
                     "category": ["DEFAULT", "BROWSABLE"]
                 }

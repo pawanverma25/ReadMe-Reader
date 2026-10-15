@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { Book } from '../../types';
 import { saveCoverImage } from '../../utils/storage';
+import { formatRegistry } from '../../formats';
 
 export const ThumbnailGenerator: React.FC = () => {
   const { books, updateBookCover } = useLibrary();
@@ -20,6 +21,7 @@ export const ThumbnailGenerator: React.FC = () => {
       (b) =>
         (!b.coverUrl || b.coverUrl.length <= 20) &&
         b.uri &&
+        (!b.format || b.format === 'pdf' || formatRegistry.detectFormat(b.uri).id === 'pdf') &&
         !attemptedIdsRef.current.has(b.id)
     );
 
